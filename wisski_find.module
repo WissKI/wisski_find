@@ -1,0 +1,666 @@
+<?php
+// $Id$
+
+/* provide a search form for top groups
+* and searching functionality
+*/
+
+
+/** Implemenation of hook_menu
+*/
+function wisski_find_menu () {
+
+  $item['find'] = array(
+    'title' => 'Find',
+    'page callback' => 'wisski_find_selectGroup',
+    'type' => MENU_NORMAL_ITEM,
+    'access arguments' => array('wisski access templateView'),
+  );
+  $item["find/%wisski_find_group"] = array(
+    'title' => '',
+    'title callback' => 'wisski_find_title',
+    'title arguments' => array(1),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_find_selectPaths2', 1),
+    'type' => MENU_NORMAL_ITEM,
+    'access arguments' => array('wisski access templateView'),
+  );
+  $item['find/%wisski_find_group/result/%'] = array(
+    'title' => '',
+    'title callback' => 'wisski_find_titleResult',
+    'title arguments' => array(1),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_find_showResult', 1, 3),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('wisski access templateView'),
+  );
+  $item['find/%wisski_find_group/result/%/%'] = array(
+    'title' => '',
+    'title callback' => 'wisski_find_titleResult',
+    'title arguments' => array(1),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_find_showResult', 1, 3, 4),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('wisski access templateView'),
+  );
+  $item['find_js/%wisski_find_group'] = array(
+    'title' => '',
+    'page callback' => 'wisski_find_ahahAddSearchFieldset',
+    'page arguments' => array(1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('wisski access templateView'),
+  );
+  
+  $item['goto_find'] = array(
+    'title' => t('Find'),
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('find'),
+    'access callback' => 'user_access',
+    'menu_name' => 'secondary-links',
+    'weight' => -50,
+  );
+
+  return $item;
+
+}
+
+
+/** Implementation of hook_load
+*/
+function wisski_find_group_load($name) {
+
+ include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+ return wisski_pathbuilder_getGroupByName($name);
+
+}
+
+
+/* TODO: move to wisski_pathbuilder module
+*/
+/**Get group info using the groups name
+* @return the first entry in db for which its name is $name
+*/
+function wisski_pathbuilder_getGroupByName($name) {
+  
+  $result = db_query("SELECT * FROM {wisski_template} WHERE `is_group` = 1 AND `name` = '$name'");
+  return db_fetch_array($result);
+  
+}
+
+
+/** Callback for page title
+*/
+function wisski_find_title($group) {
+  return t('Find') . " " . $group['name'];
+}
+
+
+/* Callback for result page title
+*/
+function wisski_find_titleResult($group) {
+  return t('Search results for ') . " " . $group['name'];
+}
+
+
+
+function wisski_find_theme() {
+
+  return array(
+/*    'wisski_find_pathRow' => array(
+      'arguments' => array('form' => NULL),
+    ),
+    'wisski_find_pathTable' => array(
+      'arguments' => array('form' => NULL),
+    )*/
+    'wisski_find_searchFieldset' => array(
+      'arguments' => array('form' => NULL),
+    )
+  );
+
+}
+
+
+/** Build page for selecting a category
+*/
+function wisski_find_selectGroup() {
+  global $base_root, $base_path;
+  
+  $form['description'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#value' => t('Search in one of the categories below.'),
+    '#weight' => 0,
+  );
+
+  $list = wisski_find_add_groups();
+  
+  return drupal_render($form) . theme('item_list', $list);
+
+}
+
+
+/**
+*/
+function _wisski_find_getSearchPaths($group, $indentg = '', $indentp = '', $indent) {
+
+  $ids = "";
+  $pds = array(); // pathdata array
+  foreach (wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE) as $id) $pds[] = wisski_pathbuilder_getPathData($id);
+  
+  $paths = array();
+  
+  foreach ($pds as $pd) {
+
+    if (!$pd['enabled']) continue;
+    
+    if ($pd['is_group']) { // descend in subgroups recursively (there are no circles or references!)
+      
+      foreach(_wisski_find_getSearchPaths($pd, $indentp, "$indentp$indent", $indent) as $p) $paths[] = $p;
+      
+    } else {
+      
+      $paths[] = array(
+        'name' => $indentp . $pd['name'],
+        'ids' => array($pd['id'])
+      );
+      
+    }
+    
+  }
+  
+  if (count($paths)) {
+    $ids = array();
+    foreach ($paths as $p) if ($p['ids'] > 0) $ids = array_merge($ids, $p['ids']);
+    $ids = array_unique($ids);
+    $paths = array_merge(
+      array(array(
+        'name' => (($indentp == '') ? '' : ($indentg . $group['name'] . ' ')) . t('(all entries)'),
+        'ids' => $ids
+      )),
+      $paths
+    );
+  }
+  
+  return (count($paths) == 1) ? array() : $paths; // if no defined paths, then don't put '(all entries)'
+  
+}
+
+
+
+/** Build the search form.
+*
+*/
+function wisski_find_selectPaths2(&$form_state, $group) {
+
+  include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+  
+  if ($group === NULL) {
+    drupal_set_message("not a valid group.", 'error');
+    drupal_goto("find");
+  }
+  
+  $form_state['storage'] = array('group' => $group['name']);
+  $form['all']['fields'] = array(
+    '#theme' => 'wisski_find_searchFieldset',
+  );
+  
+  $not_first = FALSE; // determine, if it is the first field in table
+  
+  $nof = variable_get('wisski_find_defaultNumberOfFields', 0);
+  $toplevel = TRUE;
+  
+  // there are three modes of how many
+  // search fields are provided and which
+  // paths are preselected
+  if ($nof == 0) {
+    // toplevel paths:
+    // all paths that are directly under the top group
+    // and aggregate fields for groups under top group
+    // and one "all fields" field 
+    $nof = count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE)) + 1; // plus one extra for "all fields"
+  } elseif ($nof > 0) {
+    // a fixed number of fields
+    // # $nof of fields
+    // fields will be preselected with the paths and groups
+    // defined directly under top group
+    // if there are more fields than paths, they will be
+    // filled with "all fields" fields
+  } else {  // $nof < 0
+    // all paths
+    // make a field for each defined path
+    // don't make aggregate fields for groups
+    $nof = count(_wisski_find_getSearchPaths($group, '','','')) - count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE)) + count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], FALSE)) - 1;
+    $toplevel = FALSE;
+  }
+  
+  // make $nof number of fields
+  for ($i = 0; $i < $nof; $i++) {
+    $tmp = _wisski_find_searchField($group, $i, $not_first, $toplevel);
+    $form['all']['fields'] = array_merge($form['all']['fields'], $tmp[1]);
+    $form_state['storage']['fields'][] = $tmp[0];
+    $not_first = TRUE;  // the first field will not get a AND/OR select field
+  }
+
+  $form['all']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+  );
+
+  
+  return $form;
+  
+}
+
+
+
+function wisski_find_selectPaths2_validate($form, &$form_state) {
+// we will compute the search result in the validate phase
+// so that we can trigger an error if the search result is empty
+// the search result will be cached and passed to submit stage
+
+  $vals = $form_state['clicked_button']['#post'];
+  $fids = $form_state['storage']['fields'];
+
+  // build a search tree from form values
+  // see wisski_find_search() for data structure
+  $search = array();
+  foreach($fids as $fid) {
+    $structs = array();
+    if (trim($vals["term_$fid"]) == '') continue; // empty fields are ignored
+
+    foreach(explode(';', $vals["path_$fid"]) as $pathid) {
+      $structs[] = array(
+        'path' => $pathid,
+        'term' => $vals["term_$fid"],
+        'match' => ($vals["match_mode_$fid"]) ? 'exact' : 'like',
+      );
+    }
+    if (count($structs) > 1) $structs = array('op' => 'OR', 'args' => $structs);
+    else $structs = $structs[0];
+    if (isset($vals["operator_$fid"]) && count($search)) {
+      $search = array(
+        'op' => $vals["operator_$fid"],
+        'args' => array(
+          0 => $search,
+          1 => $structs
+        )
+      );
+    } else {
+      $search = $structs;
+    }
+  }
+
+  // the user must input something to search for
+  if (count($search) == 0) {
+    form_set_error('', 'No terms to search for. Please enter some search term(s).');
+    return;
+  }
+
+  // search the data
+  include_once(drupal_get_path('module', 'wisski_find') . "/search.inc");
+  $uris = wisski_find_search($search);
+
+  if (count($uris) == 0) {
+    // there are no results
+    form_set_error('', 'No items found. Please widen your search.');
+  } else {
+    // the results are cached with a generic id
+    // the id is stored in the form state and will
+    // be used to redirect the user to the result view page
+    global $base_root, $base_path;
+    $group = $form_state['storage']['group'];
+    $form_state['storage']['result'] = $uris;
+    drupal_load('module', 'wisski');
+    $id = wisski_get_uid();
+    cache_set("wisski_find_result_$id", $uris, 'cache', CACHE_TEMPORARY);
+    $form_state['storage']['result_url'] = $form_state['redirect'] = "$base_root${base_path}find/$group/result/$id";
+  }
+
+}
+
+
+function wisski_find_selectPaths2_submit(&$form, &$form_state) {
+  // results have been cached
+  // just redirect to the result page
+  drupal_goto($form_state['storage']['result_url']);
+}
+
+
+/** Build page with search results.
+* For a big result set, split into multiple pages.
+*
+*/
+function wisski_find_showResult($form_state, $group, $id, $page = 1) {
+  global $base_root, $base_path;
+  
+  $uris = cache_get("wisski_find_result_$id");
+  $uris = $uris->data;
+  if (!$uris) {
+    drupal_set_message('The search result was deleted from cache already. Try a new search.', 'error');
+    drupal_goto("$base_root${base_path}find");
+    return;
+  }
+  
+  $ipp = variable_get('wisski_find_resultItemsPerPage', 30);
+  $min = ($page - 1) * $ipp;
+  $max = $page * $ipp;
+  
+  $form['heading'] = array(
+    '#prefix' => '<label>',
+    '#suffix' => '</label>',
+    '#value' => count($uris) . t(" items found") . ":",
+  );
+
+  $form['items'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<ul>',
+    '#suffix' => '</ul>', 
+  );
+  
+  $i = -1;
+
+  $urirank = array();
+  foreach ($uris as $uri => $pids) $urirank[$uri] = count($pids);
+
+  arsort($urirank);
+  foreach($urirank as $uri => $rank) {
+    $i++;
+    if ($i < $min) continue;
+    if ($i >= $max) break;
+
+    $ntitle = $group['short_name'];
+    if (!$ntitle) {
+
+      $node = _wisski_find_getNodeForURI($uri);
+      $ntitle = $node->title;
+
+    } else {
+      
+      $tiles = preg_split('/!(\\d+)/', $ntitle, 0, PREG_SPLIT_DELIM_CAPTURE);
+      $ntitle = array_shift($tiles);
+
+      for ($j = 0; $j < count($tiles); $j += 2) {
+       
+        //$sc = wisski_pathbuilder_getSparqlComponents($tiles[$j]);
+        $sc = wisski_pathbuilder_get_sparql($tiles[$j], "", TRUE);
+
+        $sparql = "";
+        foreach (wisski_store_getObj()->wisski_ARCAdapter_getNamespaces() as $pre => $ns) {
+          $sparql .= "PREFIX $pre: <$ns>\n";
+        }
+        $sparql .= "select ?out where { \n";
+        foreach ($sc['triples'] as $tr) {
+          $sparql .= str_replace('?x0', "<$uri>", $tr) . " .";
+        }
+        $sparql .= " } ";
+
+        $store = wisski_store_getObj()->wisski_ARCAdapter_getStore();
+        $res = $store->query($sparql, 'row');
+
+        if ($store->getErrors()) {
+          foreach ($store->getErrors() as $err) drupal_set_message($err, "error");
+        }
+        
+        if ($res['out']) {
+          $ntitle .= $res['out'];
+        } else {
+          $ntitle .= "";
+        }
+        if (count($tiles) > $j + 1) $ntitle .= $tiles[$j + 1];
+
+      }
+
+    }
+
+    
+    $value = "<a href='$uri'>" . $ntitle . '</a>';
+    if (variable_get('wisski_find_resultPreviewValues', TRUE)) {
+      $value .= '<span style="font-size:90%">';
+      include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+      $preview = array();
+      foreach($uris[$uri] as $a) $preview[] = implode(";", $a);
+      $preview = array_unique($preview);
+      foreach(wisski_pathbuilder_getPathOrder($group) as $path) {
+        foreach($preview as $p) {
+          $p = explode(';', $p, 2);
+          if ($p[0] == $path['id']) $value .= '<br/><strong>' . $path['name'] . ': </strong>' . $p[1];
+        }
+      }
+      $value .= '</span>';
+    }
+
+    $form['items']["item_$i"] = array(
+      '#type' => 'markup',
+      '#prefix' => "<li>",
+      '#suffix' => '</li>',
+      '#value' => $value,
+    );
+    
+  }
+  
+  $uricnt = count($uris);
+  $pagecnt = floor($uricnt / $ipp) + (($uricnt % $ipp != 0) ? 1 : 0);
+  
+  $form['pages'] = array(
+    '#prefix' => '<div>Pages: ',
+    '#suffix' => '</div>',
+  );
+  for ($i = 1; $i <= $pagecnt; $i++) {
+    $form['pages']["page_$i"] = array(
+      '#value' => ($i == $page) ? "$i " : "<a href='$base_root${base_path}find/" . $group['name'] . "/result/$id/$i'>$i</a> ",
+    );
+  }
+
+  return $form;
+
+}
+
+
+/** helper function to arrange hit fields in results
+*/
+function wisski_pathbuilder_getPathOrder($group) {
+  
+  $order = array();
+  foreach(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE) as $id) {
+    
+    $path = wisski_pathbuilder_getPathData($id);
+    if ($path['is_group']) {
+      $order = array_merge($order, wisski_pathbuilder_getPathOrder($path));
+    } else {
+      $order[] = $path;
+    }
+    
+  }
+  
+  return $order;
+  
+}
+  
+  
+
+/** Build a search field, ie. a row in the search field table
+* 
+*/
+function _wisski_find_searchField($group, $id, $has_operator = TRUE, $toplevel = TRUE) {
+  
+  // get an array with all path definintions
+  $paths = _wisski_find_getSearchPaths($group, '', '  ', '  '); // using nonbreaking space! do not alter!
+  //$paths = _wisski_find_getSearchPaths($group, '', '- ', '- '); // using nonbreaking space! do not alter!
+
+  // options array for path select form field
+  // Path or group names map to ids of paths that will be searched (key)
+  $pathopt = array();
+  foreach ($paths as $path) $pathopt[implode(';', $path['ids'])] = $path['name'];
+  
+  // get the default value for field $id
+  // ($id is actually the $id'th field in the search form)
+  $j = 0;
+  foreach ($pathopt as $k => $v) {
+    if ($toplevel && strpos($v, '    ') === 0) continue;  // skip paths of subgroups, show subgroups instead
+    if (! $toplevel && strpos($k, ';')) continue;         // skip subgroups
+    if ($j++ == $id) {
+      $defopt = $k;
+      break;
+    }
+  }
+  
+  $form["searchField_$id"] = array(
+    "operator_$id" =>
+      ($has_operator) ? 
+      array(
+        '#type' => 'select',
+        '#default_value' => 'OR',
+        '#options' => array('OR' => t('OR'), 'AND' => t('AND')),
+      )
+      :
+      array(),
+    "path_$id" => array(
+      '#type' => 'select',
+      '#options' => $pathopt,
+      '#default_value' => $defopt,
+    ),
+    "term_$id" => array(
+      '#type' => 'textfield',
+      '#size' => 30,
+      '#default_value' => "",
+    ),
+    "match_mode_$id" => array(
+      '#type' => 'checkbox',
+      '#title' => t('exact match'),
+    ),
+  );
+
+  return array($id, $form);
+
+};
+
+
+
+function theme_wisski_find_searchFieldset($form) {
+  $order = array('operator_', 'path_', 'term_', 'match_mode_'); //, 'add_');
+
+  $rows = array();
+  foreach (element_children($form) as $f) {
+    $row = array();
+    $id = substr($f, 12); // strlen('searchField_')
+    foreach ($order as $o) $row[] = drupal_render($form[$f]["$o$id"]);
+    $rows[] = $row;
+  }
+
+  $out = '<div id="' . $form['#ahah_wrapper'] . '">';
+  $out .= theme('table', NULL, $rows);
+  $out .= '</div>';
+  
+  return $out;
+
+}
+
+function wisski_find_selectGroup_validate($form, &$form_state) {
+
+  $gid = $form_state['values']['groups'];
+  if ($gid == NULL) form_set_error('groups', t('Please select a category.'));
+
+}
+
+
+
+function wisski_find_selectGroup_submit($form, &$form_state) {
+  global $base_root, $base_path;
+  
+  $name = $form_state['values']['groups'];
+  $form_state['redirect'] = "$base_root$base_path" . "find/$name";
+
+} 
+
+function _wisski_find_getNodeForURI($uri) {
+  global $base_path;
+  
+  $uri = parse_url($uri);
+  $uri = $uri['path'];
+  if (strpos($uri, $base_path) !== 0) {
+    return NULL;
+  }
+  
+  $uri = substr($uri, strlen($base_path));
+  
+  $uri = drupal_get_normal_path($uri);
+  $nid = arg(1, $uri);
+  
+  $node = node_load(array('nid' => $nid));
+  
+  if ($node === FALSE || $node === NULL) return NULL;
+  
+  return $node;
+  
+}
+
+
+/** Get searchable groups and set menu links 
+* @author Mark Fichtner
+*/
+function wisski_find_add_groups() {
+  include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+  $myIDs = variable_get('wisski_findMenus', array());
+
+  $groups = wisski_pathbuilder_getGroups();
+
+  $saveIDs = array();
+  
+  foreach($myIDs as $id => $itemid) {
+    $oldlinks[$itemid] = menu_link_load($id);
+    if(!in_array($itemid, $groups))
+      menu_link_delete($id);
+  }
+
+  
+  $ret = array();
+  
+  foreach($groups as $group) {
+
+    $data = wisski_pathbuilder_getPathData($group);
+    if(!($data['enabled']))
+      continue;
+    $item = array();
+    $item['link_path'] = ("find/" . $data['name']);
+    $item['link_title'] = $data['name'];
+    $item['menu_name'] = isset($oldlinks[$group]['menu_name']) ? $oldlinks[$group]['menu_name']: "navigation";
+    $item['weight'] = isset($oldlinks[$group]['weight']) ? $oldlinks[$group]['weight'] : 0;
+    $item['expanded'] = isset($oldlinks[$group]['expanded']) ? $oldlinks[$group]['expanded'] : 0;
+    $item['options'] = array();
+    $item['mlid'] = isset($oldlinks[$group]['mlid']) ? $oldlinks[$group]['mlid'] : NULL;
+    $item['hidden'] = isset($oldlinks[$group]['hidden']) ? $oldlinks[$group]['hidden'] : 0;
+    $item['plid'] = isset($oldlinks[$group]['plid']) ? $oldlinks[$group]['plid'] : NULL;
+      
+    $id = menu_link_save(&$item);
+    $saveIDs[$id] = $group;
+    if($item['hidden'] == 0) { 
+      if(module_exists("menu_per_role")) {
+      	if(is_null(_menu_per_role_access($id))) 
+          $ret[] = l($data['name'], ("find/" . $data['name']));
+      }
+      else
+        $ret[] = l($data['name'], ("find/" . $data['name']));
+    }
+  }
+
+
+  variable_set('wisski_findMenus', $saveIDs);
+
+  return $ret;
+  
+
+}
+
+/** Set the menu links
+* @author Mark Fichtner
+*/
+function wisski_find_enable() {
+  wisski_find_add_groups();
+}
+
+  
+
+
+
+

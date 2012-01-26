@@ -1,0 +1,10 @@
+; $Id$
+name = WissKI Find Module
+description = Find datasets using a field search.
+core = 6.x
+version = 1.0
+package = "WissKI"
+dependencies[] = wisski
+dependencies[] = wisski_pathbuilder
+dependencies[] = wisski_reasoner
+
