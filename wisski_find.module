@@ -452,10 +452,83 @@ function wisski_find_showResult($form_state, $group, $id, $page = 1) {
     );
   }
 
+  $form['export'] = array(
+    '#type' => 'image_button',
+    '#attributes' => array('src' => base_path() . 'sites/all/modules/wisski_find/export_excel.png', 'alt' => t('Export to Excel')), 
+    '#submit' => array('wisski_find_export'),
+  );
+
   return $form;
 
 }
 
+function wisski_find_export($form, $form_state) {
+  
+  $id = arg(3);
+  $groupname = arg(1);
+  $uris = cache_get("wisski_find_result_$id");
+  $uris = $uris->data;
+  
+  $filename = file_directory_temp() . "/" . $id . ".xls";
+
+  $fh = fopen($filename, "w+");
+
+  $groupquery = "SELECT * FROM {wisski_template} WHERE `name` = '" . $groupname . "'";
+  
+  $result = db_query($groupquery);
+  $grouparr = db_fetch_array($result);
+  $groupid = $grouparr['id'];
+  
+  $pathIds = wisski_pathbuilder_getEnabledInternaMembers($groupid, TRUE, TRUE);
+  
+  foreach($pathIds as $pathid) {
+    $pathdata = wisski_pathbuilder_getPathData($pathid);
+    fwrite($fh, $pathdata['name'] . "\t");
+  }
+  fwrite($fh, "\n");
+  
+  foreach($uris as $uri => $values) {
+    foreach($pathIds as $pathid) {
+      $sparql = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?x0 = <' . $uri . '> )', FALSE, 0, FALSE);
+      
+      $sprows = wisski_store_getObj()->wisski_ARCAdapter_getStore()->query($sparql, 'rows');
+
+      if(count($sprows) > 1)
+        fwrite($fh, "\"");
+
+      $i = 0;
+      foreach($sprows as $sprow) {
+        fwrite($fh, iconv('UTF-8', 'cp1250', $sprow['out']));
+        $i++;
+        if($i < count($sprows))
+          fwrite($fh, "\n");
+      }
+      if(count($sprows) > 1)   
+        fwrite($fh, "\"");
+      fwrite($fh, "\t");
+    }
+    fwrite($fh, "\n");
+  }
+  
+
+  fclose($fh);
+
+
+  header("Pragma: public");
+  header("Expires: 0");
+  header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+  header("Cache-Control: private",false);
+  header("Content-Type: application/vnd.ms-excel");
+  header("Content-Disposition: attachment; filename=\"" . basename($filename) . "\";" );
+  header("Content-Transfer-Encoding: binary");
+
+  readfile($filename);
+
+
+  flush();  
+  
+  unlink($filename);
+}
 
 /** helper function to arrange hit fields in results
 */
