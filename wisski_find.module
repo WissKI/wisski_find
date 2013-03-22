@@ -171,7 +171,7 @@ function _wisski_find_getSearchPaths($group, $indentg = '', $indentp = '', $inde
   
   if (count($paths)) {
     $ids = array();
-    foreach ($paths as $p) if ($p['ids'] > 0) $ids = array_merge($ids, $p['ids']);
+    foreach ($paths as $p) if (count($p['ids']) > 0) $ids = array_merge($ids, $p['ids']);
     $ids = array_unique($ids);
     $paths = array_merge(
       array(array(
