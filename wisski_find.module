@@ -67,18 +67,18 @@ function wisski_find_menu () {
 
 /** Implementation of hook_load
 */
-function wisski_find_group_load($name) {
+function wisski_find_group_load($id) {
 
  include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
- return wisski_pathbuilder_getGroupByName($name);
+ return wisski_pathbuilder_getPathData($id);
 
 }
 
 
-/* TODO: move to wisski_pathbuilder module
-*/
 /**Get group info using the groups name
 * @return the first entry in db for which its name is $name
+*
+* @depricated
 */
 function wisski_pathbuilder_getGroupByName($name) {
   
@@ -200,7 +200,7 @@ function wisski_find_selectPaths2(&$form_state, $group) {
     drupal_goto("find");
   }
   
-  $form_state['storage'] = array('group' => $group['name']);
+  $form_state['storage'] = array('group' => $group['id']);
   $form['all']['fields'] = array(
     '#theme' => 'wisski_find_searchFieldset',
   );
@@ -448,7 +448,7 @@ function wisski_find_showResult($form_state, $group, $id, $page = 1) {
   );
   for ($i = 1; $i <= $pagecnt; $i++) {
     $form['pages']["page_$i"] = array(
-      '#value' => ($i == $page) ? "$i " : "<a href='$base_root${base_path}find/" . $group['name'] . "/result/$id/$i'>$i</a> ",
+      '#value' => ($i == $page) ? "$i " : "<a href='$base_root${base_path}find/" . $group['id'] . "/result/$id/$i'>$i</a> ",
     );
   }
 
@@ -695,7 +695,7 @@ function wisski_find_add_groups() {
     if(!($data['enabled']))
       continue;
     $item = array();
-    $item['link_path'] = ("find/" . $data['name']);
+    $item['link_path'] = ("find/" . $data['id']);
     $item['link_title'] = $data['name'];
     $item['menu_name'] = isset($oldlinks[$group]['menu_name']) ? $oldlinks[$group]['menu_name']: "navigation";
     $item['weight'] = isset($oldlinks[$group]['weight']) ? $oldlinks[$group]['weight'] : 0;
@@ -710,10 +710,10 @@ function wisski_find_add_groups() {
     if($item['hidden'] == 0) { 
       if(module_exists("menu_per_role")) {
       	if(is_null(_menu_per_role_access($id))) 
-          $ret[] = l($data['name'], ("find/" . $data['name']));
+          $ret[] = l($data['name'], ("find/" . $data['id']));
       }
       else
-        $ret[] = l($data['name'], ("find/" . $data['name']));
+        $ret[] = l($data['name'], ("find/" . $data['id']));
     }
   }
 
