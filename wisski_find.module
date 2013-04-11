@@ -16,6 +16,15 @@ function wisski_find_menu () {
     'type' => MENU_NORMAL_ITEM,
     'access arguments' => array('wisski access templateView'),
   );
+  
+  $item['admin/settings/wisski/visual'] = array(
+    'title' => 'Visual Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_find_visualSettings'),
+    'type' => MENU_LOCAL_TASK,
+    'access arguments' => array('wisski access templateEdit'),
+  );
+  
   $item["find/%wisski_find_group"] = array(
     'title' => '',
     'title callback' => 'wisski_find_title',
@@ -29,11 +38,12 @@ function wisski_find_menu () {
     'title' => '',
     'title callback' => 'wisski_find_titleResult',
     'title arguments' => array(1),
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('wisski_find_showResult', 1, 3),
+    'page callback' => 'wisski_find_showResult',
+    'page arguments' => array(1, 3),
     'type' => MENU_CALLBACK,
     'access arguments' => array('wisski access templateView'),
   );
+/*
   $item['find/%wisski_find_group/result/%/%'] = array(
     'title' => '',
     'title callback' => 'wisski_find_titleResult',
@@ -43,6 +53,7 @@ function wisski_find_menu () {
     'type' => MENU_CALLBACK,
     'access arguments' => array('wisski access templateView'),
   );
+*/
   $item['find_js/%wisski_find_group'] = array(
     'title' => '',
     'page callback' => 'wisski_find_ahahAddSearchFieldset',
@@ -84,6 +95,46 @@ function wisski_pathbuilder_getGroupByName($name) {
   
   $result = db_query("SELECT * FROM {wisski_template} WHERE is_group = 1 AND name = '$name'");
   return db_fetch_array($result);
+  
+}
+
+function wisski_find_visualSettings() {
+  
+  $form = array ();
+  $form['wisski_find_comment'] = array(
+    '#value' => t('Here you can toggle the view of many WissKI elements like search lists and navigation menus.'), 
+  );
+
+  $form['wisski_find_resulthits'] = array (
+    '#type' => 'textfield',
+    '#title' => t('Number of results'),
+    '#description' => t('The Number of results to show in navigate and find per page. 0 can be set to show all at once. Be careful, this setting is very slow!'),
+    '#default_value' => variable_get('wisski_find_resultItemsPerPage', 20),
+    '#size' => 4,
+    '#maxlength' => 255,
+  );
+  $form['wisski_find_list'] = array(
+    '#type' => 'radios',
+    '#title' => 'Display Mode',
+    '#description' => t('Should navigate and find show as a list or as tiles?'),
+    '#options' => array('list' => 'list', 'tiles' => 'tiles'),
+    '#default_value' => variable_get('wisski_find_styleResultPage', 'list'),
+  );
+
+  $form['wisski_find_submit'] = array (
+    '#type' => 'submit',
+    '#value' => t('Save settings'),
+  );
+
+  return $form;  
+
+}
+
+function wisski_find_visualSettings_submit($form, $form_state) {
+  drupal_set_message("Settings saved.");
+  
+  variable_set('wisski_find_resultItemsPerPage',$form_state['values']['wisski_find_resulthits']);
+  variable_set('wisski_find_styleResultPage', $form_state['values']['wisski_find_list']);
   
 }
 
@@ -171,7 +222,7 @@ function _wisski_find_getSearchPaths($group, $indentg = '', $indentp = '', $inde
   
   if (count($paths)) {
     $ids = array();
-    foreach ($paths as $p) if (count($p['ids']) > 0) $ids = array_merge($ids, $p['ids']);
+    foreach ($paths as $p) if ($p['ids'] > 0) $ids = array_merge($ids, $p['ids']);
     $ids = array_unique($ids);
     $paths = array_merge(
       array(array(
@@ -271,6 +322,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
 
     foreach(explode(';', $vals["path_$fid"]) as $pathid) {
       $structs[] = array(
+        'group' => $form_state['storage']['group'],
         'path' => $pathid,
         'term' => $vals["term_$fid"],
         'match' => ($vals["match_mode_$fid"]) ? 'exact' : 'like',
@@ -310,6 +362,10 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
     // be used to redirect the user to the result view page
     global $base_root, $base_path;
     $group = $form_state['storage']['group'];
+    
+    // tune the results so that they are sorted by their displayed title
+    $uris = wisski_find_tuneResults(wisski_pathbuilder_getGroupByName($group), $uris);
+    
     $form_state['storage']['result'] = $uris;
     drupal_load('module', 'wisski');
     $id = wisski_get_uid();
@@ -326,95 +382,122 @@ function wisski_find_selectPaths2_submit(&$form, &$form_state) {
   drupal_goto($form_state['storage']['result_url']);
 }
 
+function wisski_find_tuneResults($group, $uris) {
+  $urirank = array();
+  foreach ($uris as $uri => $pids) {
+    //$urirank[$uri] = count($pids);
+    $urirank[count($pids)][] = $uri;
+  }
+  
+  // sort by rank
+  arsort($urirank);
+  
+  // go through all ranks
+  foreach($urirank as $rank => $rankeduris) {
+    $nameduris = array();
+    
+    // and sort by by title
+    foreach($rankeduris as $uri) {
+      $ntitle = $group['short_name'];
+      if (!$ntitle) {
+        $node = _wisski_find_getNodeForURI($uri);
+        $ntitle = $node->title;
+      } else {
+        include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+        $ntitle = wisski_pathbuilder_generateGroupName($uri, $group['id']);
+      }
+      
+      $nameduris[$rank][$uri] = $ntitle;
+    }
+    
+    asort($nameduris[$rank], SORT_NUMERIC);
+  }
+  
+  $outuris = array();
+  foreach($nameduris as $rank => $sorteduris) {
+    foreach($sorteduris as $uri => $title) {
+      $outuris[$uri] = $uris[$uri];
+      $outuris[$uri][0]['title'] = $title;
+    }
+  }
+  
+  return $outuris;
+}
 
 /** Build page with search results.
 * For a big result set, split into multiple pages.
 *
 */
-function wisski_find_showResult($form_state, $group, $id, $page = 1) {
+function wisski_find_showResult($group, $id) {
   global $base_root, $base_path;
+  // Get the standard drupal pager support
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : 0;
+  $pager_page_array = explode(',', $page);
   
+  // fetch the uris from the cache
   $uris = cache_get("wisski_find_result_$id");
   $uris = $uris->data;
+
   if (!$uris) {
     drupal_set_message('The search result was deleted from cache already. Try a new search.', 'error');
     drupal_goto("$base_root${base_path}find");
     return;
   }
   
-  $ipp = variable_get('wisski_find_resultItemsPerPage', 30);
-  $min = ($page - 1) * $ipp;
-  $max = $page * $ipp;
+  $limit = variable_get('wisski_find_resultItemsPerPage', 30);
   
+  // total sum of uris
+  $sum = count($uris);
+  
+  // pager name
+  $element = 0;
+  
+  // configure pager correctly
+  $pager_total_items[$element] = $sum;
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int) $pager_total[$element]) - 1));
+  
+  // determine beginning and ending of the items of the page
+  $begin = ($page * $limit) + 1;
+  $end = $begin - 1 + $limit;
+  
+  // formulate a nice headline
   $form['heading'] = array(
     '#prefix' => '<label>',
     '#suffix' => '</label>',
-    '#value' => count($uris) . t(" items found") . ":",
+    '#value' => t("Hits") . " " . $begin . " - " . $end . " " . t("of") . " " . count($uris) . ":",
   );
 
-  $form['items'] = array(
-    '#type' => 'markup',
-    '#prefix' => '<ul>',
-    '#suffix' => '</ul>', 
-  );
-  
-  $i = -1;
+  // get the correct style. This is used below.
+  $style = variable_get('wisski_find_styleResultPage', 'list');
+  // images? suppose yes!
+  $image_support = variable_get('wisski_find_imageSupport', 'yes');
 
-  $urirank = array();
-  foreach ($uris as $uri => $pids) $urirank[$uri] = count($pids);
-
-  arsort($urirank);
-  foreach($urirank as $uri => $rank) {
+  // track the number of items
+  $i = 0;
+  // go through all uris
+  foreach($uris as $uri => $pids) {
     $i++;
-    if ($i < $min) continue;
-    if ($i >= $max) break;
-
-    $ntitle = $group['short_name'];
-    if (!$ntitle) {
-
-      $node = _wisski_find_getNodeForURI($uri);
-      $ntitle = $node->title;
-
-    } else {
-      
-      $tiles = preg_split('/!(\\d+)/', $ntitle, 0, PREG_SPLIT_DELIM_CAPTURE);
-      $ntitle = array_shift($tiles);
-
-      for ($j = 0; $j < count($tiles); $j += 2) {
-       
-        //$sc = wisski_pathbuilder_getSparqlComponents($tiles[$j]);
-        $sc = wisski_pathbuilder_get_sparql($tiles[$j], "", TRUE);
-
-        $sparql = "";
-        foreach (wisski_store_getObj()->wisski_ARCAdapter_getNamespaces() as $pre => $ns) {
-          $sparql .= "PREFIX $pre: <$ns>\n";
-        }
-        $sparql .= "select ?out where { \n";
-        foreach ($sc['triples'] as $tr) {
-          $sparql .= str_replace('?x0', "<$uri>", $tr) . " .";
-        }
-        $sparql .= " } ";
-
-        $store = wisski_store_getObj()->wisski_ARCAdapter_getStore();
-        $res = $store->query($sparql, 'row');
-
-        if ($store->getErrors()) {
-          foreach ($store->getErrors() as $err) drupal_set_message($err, "error");
-        }
-        
-        if ($res['out']) {
-          $ntitle .= $res['out'];
-        } else {
-          $ntitle .= "";
-        }
-        if (count($tiles) > $j + 1) $ntitle .= $tiles[$j + 1];
-
-      }
-
-    }
-
+    // switch to the correct one
+    if ($i < $begin) continue;
+    if ($i > $end) break;
     
-    $value = "<a href='$uri'>" . $ntitle . '</a>';
+    $ntitle = $uris[$uri][0]['title'];
+    unset($uris[$uri][0]['title']);
+    
+    if($image_support == "yes") {
+      $imgs = wisski_pathbuilder_getImages(wisski_store_getObj()->wisski_ARCAdapter_addNamespace($uri));
+      preg_match('/<img src="(.*?)" alt/', $imgs, $matches);
+    }
+        
+    if($image_support && !empty($matches[1]))
+      $value = "<img src='" . $matches[1]. "'/>\n" . 
+               "<a href='$uri'>" . $ntitle . 
+               '</a>';
+    else
+      $value = "<a href='$uri'>" . $ntitle . '</a>';
+
     if (variable_get('wisski_find_resultPreviewValues', TRUE)) {
       $value .= '<span style="font-size:90%">';
       include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
@@ -429,36 +512,19 @@ function wisski_find_showResult($form_state, $group, $id, $page = 1) {
       }
       $value .= '</span>';
     }
-
-    $form['items']["item_$i"] = array(
-      '#type' => 'markup',
-      '#prefix' => "<li>",
-      '#suffix' => '</li>',
-      '#value' => $value,
-    );
-    
-  }
   
-  $uricnt = count($uris);
-  $pagecnt = floor($uricnt / $ipp) + (($uricnt % $ipp != 0) ? 1 : 0);
+    $list[] = array('data' => $value, 'class'=> 'wisski_resultitem'); 
+  }  
   
-  $form['pages'] = array(
-    '#prefix' => '<div>Pages: ',
-    '#suffix' => '</div>',
-  );
-  for ($i = 1; $i <= $pagecnt; $i++) {
-    $form['pages']["page_$i"] = array(
-      '#value' => ($i == $page) ? "$i " : "<a href='$base_root${base_path}find/" . $group['id'] . "/result/$id/$i'>$i</a> ",
-    );
-  }
-
+  // make a nice export button
   $form['export'] = array(
     '#type' => 'image_button',
-    '#attributes' => array('src' => base_path() . drupal_get_path('module', 'wisski_find') . '/export_excel.png', 'alt' => t('Export to Excel')), 
+    '#attributes' => array('src' => base_path() . 'sites/all/modules/wisski_find/export_excel.png', 'alt' => t('Export to Excel')), 
     '#submit' => array('wisski_find_export'),
   );
-
-  return $form;
+  
+  // keep everything as themeable as possible
+  return drupal_render($form['heading']) . theme('item_list', $list, NULL, 'ul', array('class' => ($style == 'list' ? "wisski_resultlist" : "wisski_resulttiles"))) . theme('pager', NULL, 10, 0) . drupal_render($form['export']);
 
 }
 
