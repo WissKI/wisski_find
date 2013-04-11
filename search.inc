@@ -16,7 +16,7 @@
 * )
 */
 function wisski_find_search($search, $store = NULL, $namespaces = array()) {
-  
+
   if ($store === NULL) {
     drupal_load('module', 'wisski_store');
     $store = wisski_store_getObj()->wisski_ARCAdapter_getStore();
@@ -81,7 +81,6 @@ function _wisski_find_searchOP($search, $store, $namespaces) {
 * process a search term structure
 */
 function _wisski_find_searchTerm($search, $store, $namespaces) {
-
   $pathid = $search['path'];
   $term = $search['term'];
   $match_op = $search['match'];
@@ -94,7 +93,7 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
   $result = array();
 
   foreach ($namespaces as $pre => $ns) $q .= "PREFIX $pre: <$ns>\n";
-
+  
   if ($match_op == 'exact') {
     $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out = "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
   } elseif ($match_op == 'like') {
@@ -104,7 +103,7 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
   } else {
     drupal_set_message("Invalid matching mode: '$match_op'", 'error');
   }
-
+  
   $rows = $store->query($q, 'rows');
 
   if ($store->getErrors()) {
@@ -113,7 +112,9 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
   }
 
   $ret = array();
-  foreach ($rows as $r) $ret[$r['x0']] = array(array('path' => $pathid, 'val' => $r['out']));
+  foreach ($rows as $r) {
+    $ret[$r['x0']] = array(array('path' => $pathid, 'val' => $r['out']));
+  }
 
   return $ret;
   
