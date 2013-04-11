@@ -82,7 +82,7 @@ function wisski_find_group_load($id) {
 */
 function wisski_pathbuilder_getGroupByName($name) {
   
-  $result = db_query("SELECT * FROM {wisski_template} WHERE \"is_group\" = 1 AND \"name\" = '$name'");
+  $result = db_query("SELECT * FROM {wisski_template} WHERE is_group = 1 AND name = '$name'");
   return db_fetch_array($result);
   
 }
@@ -473,7 +473,7 @@ function wisski_find_export($form, $form_state) {
 
   $fh = fopen($filename, "w+");
 
-  $groupquery = "SELECT * FROM {wisski_template} WHERE \"name\" = '" . $groupname . "'";
+  $groupquery = "SELECT * FROM {wisski_template} WHERE name = '" . $groupname . "'";
   
   $result = db_query($groupquery);
   $grouparr = db_fetch_array($result);
