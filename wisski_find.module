@@ -364,7 +364,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
     $group = $form_state['storage']['group'];
     
     // tune the results so that they are sorted by their displayed title
-    $uris = wisski_find_tuneResults(wisski_pathbuilder_getGroupByName($group), $uris);
+    $uris = wisski_find_tuneResults($group, $uris);
     
     $form_state['storage']['result'] = $uris;
     drupal_load('module', 'wisski');
@@ -399,6 +399,7 @@ function wisski_find_tuneResults($group, $uris) {
     // and sort by by title
     foreach($rankeduris as $uri) {
       $ntitle = $group['short_name'];
+
       if (!$ntitle) {
         $node = _wisski_find_getNodeForURI($uri);
         $ntitle = $node->title;
@@ -462,11 +463,13 @@ function wisski_find_showResult($group, $id) {
   $begin = ($page * $limit) + 1;
   $end = $begin - 1 + $limit;
   
+  $max = count($uris);
+  
   // formulate a nice headline
   $form['heading'] = array(
     '#prefix' => '<label>',
     '#suffix' => '</label>',
-    '#value' => t("Hits") . " " . $begin . " - " . $end . " " . t("of") . " " . count($uris) . ":",
+    '#value' => t("Hits") . " " . $begin . " - " . min($end,$max) . " " . t("of") . " " . $max . ":",
   );
 
   // get the correct style. This is used below.
@@ -482,7 +485,7 @@ function wisski_find_showResult($group, $id) {
     // switch to the correct one
     if ($i < $begin) continue;
     if ($i > $end) break;
-    
+
     $ntitle = $uris[$uri][0]['title'];
     unset($uris[$uri][0]['title']);
     
