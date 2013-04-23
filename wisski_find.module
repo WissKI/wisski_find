@@ -17,14 +17,6 @@ function wisski_find_menu () {
     'access arguments' => array('wisski access templateView'),
   );
   
-  $item['admin/settings/wisski/visual'] = array(
-    'title' => 'Visual Settings',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('wisski_find_visualSettings'),
-    'type' => MENU_LOCAL_TASK,
-    'access arguments' => array('wisski access templateEdit'),
-  );
-  
   $item["find/%wisski_find_group"] = array(
     'title' => '',
     'title callback' => 'wisski_find_title',
@@ -98,14 +90,25 @@ function wisski_pathbuilder_getGroupByName($name) {
   
 }
 
+/**
+ * Make visual settings available
+ *
+ * @author Mark Fichtner
+ *
+ */
 function wisski_find_visualSettings() {
   
   $form = array ();
-  $form['wisski_find_comment'] = array(
-    '#value' => t('Here you can toggle the view of many WissKI elements like search lists and navigation menus.'), 
+
+  $form['wisski_find_fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Find Settings'),
+    '#weight' => 0,
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
   );
 
-  $form['wisski_find_resulthits'] = array (
+  $form['wisski_find_fieldset']['wisski_find_resultItemsPerPage'] = array (
     '#type' => 'textfield',
     '#title' => t('Number of results'),
     '#description' => t('The Number of results to show in navigate and find per page. 0 can be set to show all at once. Be careful, this setting is very slow!'),
@@ -113,7 +116,8 @@ function wisski_find_visualSettings() {
     '#size' => 4,
     '#maxlength' => 255,
   );
-  $form['wisski_find_list'] = array(
+
+  $form['wisski_find_fieldset']['wisski_find_styleResultPage'] = array(
     '#type' => 'radios',
     '#title' => 'Display Mode',
     '#description' => t('Should navigate and find show as a list or as tiles?'),
@@ -121,21 +125,16 @@ function wisski_find_visualSettings() {
     '#default_value' => variable_get('wisski_find_styleResultPage', 'list'),
   );
 
-  $form['wisski_find_submit'] = array (
-    '#type' => 'submit',
-    '#value' => t('Save settings'),
-  );
-
-  return $form;  
+  return system_settings_form($form);  
 
 }
 
-function wisski_find_visualSettings_submit($form, $form_state) {
-  drupal_set_message("Settings saved.");
+function wisski_find_form_alter(&$form, &$form_state, $form_id) {
   
-  variable_set('wisski_find_resultItemsPerPage',$form_state['values']['wisski_find_resulthits']);
-  variable_set('wisski_find_styleResultPage', $form_state['values']['wisski_find_list']);
-  
+  if($form_id == 'wisski_visualSettings') {
+    $form[] = (wisski_find_visualSettings());  
+  }
+
 }
 
 
