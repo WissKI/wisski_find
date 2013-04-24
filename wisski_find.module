@@ -111,7 +111,7 @@ function wisski_find_visualSettings() {
   $form['wisski_find_fieldset']['wisski_find_resultItemsPerPage'] = array (
     '#type' => 'textfield',
     '#title' => t('Number of results'),
-    '#description' => t('The Number of results to show in navigate and find per page. 0 can be set to show all at once. Be careful, this setting is very slow!'),
+    '#description' => t('The Number of results to show in find per page. 0 can be set to show all at once. Be careful, this setting is very slow!'),
     '#default_value' => variable_get('wisski_find_resultItemsPerPage', 20),
     '#size' => 4,
     '#maxlength' => 255,
@@ -120,9 +120,17 @@ function wisski_find_visualSettings() {
   $form['wisski_find_fieldset']['wisski_find_styleResultPage'] = array(
     '#type' => 'radios',
     '#title' => 'Display Mode',
-    '#description' => t('Should navigate and find show as a list or as tiles?'),
+    '#description' => t('Should find show as a list or as tiles?'),
     '#options' => array('list' => 'list', 'tiles' => 'tiles'),
     '#default_value' => variable_get('wisski_find_styleResultPage', 'list'),
+  );
+
+  $form['wisski_find_fieldset']['wisski_find_imageSupport'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Image Preview'),
+    '#description' => t('Enable a small preview image in the find menu?'),
+    '#return_value' => 'yes',
+    '#default_value' => variable_get('wisski_find_imageSupport', 'yes'),
   );
 
   return $form;
@@ -135,7 +143,7 @@ function wisski_find_form_alter(&$form, &$form_state, $form_id) {
     $buttons = $form['buttons'];
     unset($form['buttons']);
     $form[] = (wisski_find_visualSettings());  
-    $form[] = $buttons;
+    $form['buttons'] = $buttons;
   }
 }
 
@@ -495,11 +503,23 @@ function wisski_find_showResult($group, $id) {
       preg_match('/<img src="(.*?)" alt/', $imgs, $matches);
     }
         
-    if($image_support && !empty($matches[1]))
-      $value = "<img src='" . $matches[1]. "'/>\n" . 
-               "<a href='$uri'>" . $ntitle . 
-               '</a>';
-    else
+    if($image_support) {
+      if(!empty($matches[1])) {
+        $value = "<img src='" . $matches[1]. "'/>\n" .
+                 "<a href='$uri'>" . $ntitle .
+                 '</a>';
+      } else {
+        $nopic = path_to_theme() . '/pics/img_nopic.png';
+        
+        global $base_url;
+        if(is_file($nopic)) {
+          $value = "<img src='" . $base_url . '/' . $nopic. "'/>\n" .
+                   "<a href='$uri'>" . $ntitle .
+                   '</a>';
+        } else
+          $value = "<a href='$uri'>" . $ntitle . '</a>';
+      }
+    } else
       $value = "<a href='$uri'>" . $ntitle . '</a>';
 
     if (variable_get('wisski_find_resultPreviewValues', TRUE)) {
