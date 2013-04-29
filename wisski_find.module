@@ -499,8 +499,8 @@ function wisski_find_showResult($group, $id) {
     unset($uris[$uri][0]['title']);
     
     if($image_support == "yes") {
-      $imgs = wisski_pathbuilder_getImages(wisski_store_getObj()->wisski_ARCAdapter_addNamespace($uri));
-      preg_match('/<img src="(.*?)" alt/', $imgs, $matches);
+      $imgs = wisski_pathbuilder_getImages(wisski_store_getObj()->wisski_ARCAdapter_addNamespace($uri), 1);
+      preg_match('/<img src="(.*?)"/', $imgs, $matches);
     }
         
     if($image_support) {
