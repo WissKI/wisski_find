@@ -510,7 +510,7 @@ function wisski_find_showResult($group, $id) {
         
     if($image_support) {
       if(!empty($matches[1])) {
-        $value = "<img src='" . $matches[1]. "'/>\n" .
+        $value = "<a href='$uri'><img src='" . $matches[1]. "'/></a>\n" .
                  "<a href='$uri'>" . $ntitle .
                  '</a>';
       } else {
@@ -518,7 +518,7 @@ function wisski_find_showResult($group, $id) {
         
         global $base_url;
         if(is_file($nopic)) {
-          $value = "<img src='" . $base_url . '/' . $nopic. "'/>\n" .
+          $value = "<a href='$uri'><img src='" . $base_url . '/' . $nopic. "'/></a>\n" .
                    "<a href='$uri'>" . $ntitle .
                    '</a>';
         } else
