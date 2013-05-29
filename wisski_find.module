@@ -362,6 +362,8 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
   include_once(drupal_get_path('module', 'wisski_find') . "/search.inc");
   $uris = wisski_find_search($search);
 
+  
+
   if (count($uris) == 0) {
     // there are no results
     form_set_error('', 'No items found. Please widen your search.');
@@ -401,9 +403,9 @@ function wisski_find_tuneResults($group, $uris) {
   // sort by rank
   arsort($urirank);
   
+  $nameduris = array();
   // go through all ranks
   foreach($urirank as $rank => $rankeduris) {
-    $nameduris = array();
     
     // and sort by by title
     foreach($rankeduris as $uri) {
@@ -415,14 +417,17 @@ function wisski_find_tuneResults($group, $uris) {
       } else {
         include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
         $ntitle = wisski_pathbuilder_generateGroupName($uri, $group['id']);
+        if($ntitle == $uri)
+          continue;
       }
       
       $nameduris[$rank][$uri] = $ntitle;
     }
     
-    asort($nameduris[$rank], SORT_NUMERIC);
+    if(!empty($nameduris[$rank]))
+      asort($nameduris[$rank], SORT_NUMERIC);
   }
-  
+    
   $outuris = array();
   foreach($nameduris as $rank => $sorteduris) {
     foreach($sorteduris as $uri => $title) {
@@ -799,19 +804,11 @@ function wisski_find_add_groups() {
     $saveIDs[$id] = $group;
     if($item['hidden'] == 0) { 
       if(module_exists("menu_per_role")) {
-      	if(is_null(_menu_per_role_access($id))) {
-          $string = '<dt>' . l($data['name'], ("find/" . $group)) . '</dt>';
-          if(!empty($data['description']))
-            $string .= '<dd>' . $data['description'] . '</dd>';
-          $ret[] = $string;
-        }
+      	if(is_null(_menu_per_role_access($id))) 
+          $ret[] = l($data['name'], ("find/" . $data['id']));
       }
-      else {
-        $string = '<dt>' . l($data['name'], ("find/" . $group)) . '</dt>';
-        if(!empty($data['description']))
-          $string .= '<dd>' . $data['description'] . '</dd>';
-        $ret[] = $string;
-      }
+      else
+        $ret[] = l($data['name'], ("find/" . $data['id']));
     }
   }
 
