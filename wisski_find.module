@@ -30,8 +30,10 @@ function wisski_find_menu () {
     'title' => '',
     'title callback' => 'wisski_find_titleResult',
     'title arguments' => array(1),
-    'page callback' => 'wisski_find_showResult',
-    'page arguments' => array(1, 3),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_find_showResult', 1, 3),
+//    'page callback' => 'wisski_find_showResult',
+//    'page arguments' => array(1, 3),
     'type' => MENU_CALLBACK,
     'access arguments' => array('wisski access templateView'),
   );
@@ -443,7 +445,7 @@ function wisski_find_tuneResults($group, $uris) {
 * For a big result set, split into multiple pages.
 *
 */
-function wisski_find_showResult($group, $id) {
+function wisski_find_showResult($form_state, $group, $id) {
   global $base_root, $base_path;
   // Get the standard drupal pager support
   global $pager_page_array, $pager_total, $pager_total_items;
@@ -544,6 +546,17 @@ function wisski_find_showResult($group, $id) {
   
     $list[] = array('data' => $value, 'class'=> 'wisski_resultitem'); 
   }  
+
+  // render all items
+  $form['items'] = array(
+    '#value' => theme('item_list', $list, NULL, 'ul', array('class' => ($style == 'list' ? "wisski_resultlist" : "wisski_resulttiles"))),
+  );
+   
+  // render the pager     
+  $form['pager'] = array(
+   '#value' =>  theme('pager', NULL, 10, 0),
+  );
+
   
   // make a nice export button
   $form['export'] = array(
@@ -552,9 +565,7 @@ function wisski_find_showResult($group, $id) {
     '#submit' => array('wisski_find_export'),
   );
   
-  // keep everything as themeable as possible
-  return drupal_render($form['heading']) . theme('item_list', $list, NULL, 'ul', array('class' => ($style == 'list' ? "wisski_resultlist" : "wisski_resulttiles"))) . theme('pager', NULL, 10, 0) . drupal_render($form['export']);
-
+  return $form;
 }
 
 function wisski_find_export($form, $form_state) {
