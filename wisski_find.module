@@ -329,16 +329,26 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
   $search = array();
   foreach($fids as $fid) {
     $structs = array();
-    if (trim($vals["term_$fid"]) == '') continue; // empty fields are ignored
+    if (trim($vals["term_$fid"]) == '' && empty($vals["not_empty_$fid"])) continue; // empty fields are ignored
 
     foreach(explode(';', $vals["path_$fid"]) as $pathid) {
-      $structs[] = array(
+      $path_struct = array(
         'group' => $form_state['storage']['group'],
         'path' => $pathid,
         'term' => $vals["term_$fid"],
-        'match' => ($vals["match_mode_$fid"]) ? 'exact' : 'like',
+//        'match' => ($vals["match_mode_$fid"]) ? 'exact' : 'like',
+//        'not_empty' => $vals["not_empty_$fid"],
       );
+      if(!$vals["not_empty_$fid"])
+        if($vals["match_mode_$fid"])
+          $path_struct['match'] = 'exact';
+        else
+          $path_struct['match'] = 'like';
+      else
+        $path_struct['match'] = 'not_empty';
+      $structs[] = $path_struct;
     }
+    drupal_set_message(serialize($structs));
     if (count($structs) > 1) $structs = array('op' => 'OR', 'args' => $structs);
     else $structs = $structs[0];
     if (isset($vals["operator_$fid"]) && count($search)) {
@@ -708,6 +718,10 @@ function _wisski_find_searchField($group, $id, $has_operator = TRUE, $toplevel =
       '#type' => 'checkbox',
       '#title' => t('exact match'),
     ),
+    "not_empty_$id" => array(
+      '#type' => 'checkbox',
+      '#title' => t('not empty'),
+    ),
   );
 
   return array($id, $form);
@@ -717,7 +731,7 @@ function _wisski_find_searchField($group, $id, $has_operator = TRUE, $toplevel =
 
 
 function theme_wisski_find_searchFieldset($form) {
-  $order = array('operator_', 'path_', 'term_', 'match_mode_'); //, 'add_');
+  $order = array('operator_', 'path_', 'term_', 'not_empty_', 'match_mode_'); //, 'add_');
 
   $rows = array();
   foreach (element_children($form) as $f) {

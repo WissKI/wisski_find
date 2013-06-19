@@ -93,17 +93,19 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
   $result = array();
 
   foreach ($namespaces as $pre => $ns) $q .= "PREFIX $pre: <$ns>\n";
-  
+
   if ($match_op == 'exact') {
     $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out = "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
   } elseif ($match_op == 'like') {
     $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER regex(?out, "' . str_replace('\\', '\\\\', str_replace('"', '\\"', preg_quote($term)))  . '", "i") ', FALSE);
   } elseif ($match_op == 'regex') {
     $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER regex(?out, "' . str_replace('"', '\\"', $term) . '", "i") ', FALSE);
+  } elseif($match_op == 'not_empty') {
+    $q = wisski_pathbuilder_get_sparql($pathid, '', FALSE);
   } else {
     drupal_set_message("Invalid matching mode: '$match_op'", 'error');
   }
-  
+
   $rows = $store->query($q, 'rows');
 
   if ($store->getErrors()) {
