@@ -794,10 +794,11 @@ function wisski_find_add_groups() {
 
   
   $ret = array();
-  
+    
   foreach($groups as $group) {
 
     $data = wisski_pathbuilder_getPathData($group);
+    
     if(!($data['enabled']))
       continue;
     $item = array();
@@ -810,26 +811,34 @@ function wisski_find_add_groups() {
     $item['mlid'] = isset($oldlinks[$group]['mlid']) ? $oldlinks[$group]['mlid'] : NULL;
     $item['hidden'] = isset($oldlinks[$group]['hidden']) ? $oldlinks[$group]['hidden'] : 0;
     $item['plid'] = isset($oldlinks[$group]['plid']) ? $oldlinks[$group]['plid'] : NULL;
-      
+    
     $id = menu_link_save(&$item);
     $saveIDs[$id] = $group;
     if($item['hidden'] == 0) { 
+
       if(module_exists("menu_per_role")) {
         if(is_null(_menu_per_role_access($id))) {
       	  $string = '<dt>' . l($data['name'], ("find/" . $group)) . '</dt>';
       	  if(!empty($data['description']))
       	    $string .= '<dd>' . $data['description'] . '</dd>';
-          $ret[] = $string;
+          if(!empty($item['weight']))
+            $ret[$item['weight']] = $string;
+          else 
+            $ret[] = $string;
       	}
       } else {
         $string = '<dt>' . l($data['name'], ("find/" . $group)) . '</dt>';
         if(!empty($data['description']))
           $string .= '<dd>' . $data['description'] . '</dd>';
-        $ret[] = $string;
+        if(!empty($item['weight']))
+          $ret[$item['weight']] = $string;
+        else
+          $ret[] = $string;
       }
     }
   }
 
+  ksort($ret);
 
   variable_set('wisski_findMenus', $saveIDs);
 
