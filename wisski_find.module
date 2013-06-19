@@ -348,7 +348,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
         $path_struct['match'] = 'not_empty';
       $structs[] = $path_struct;
     }
-    drupal_set_message(serialize($structs));
+
     if (count($structs) > 1) $structs = array('op' => 'OR', 'args' => $structs);
     else $structs = $structs[0];
     if (isset($vals["operator_$fid"]) && count($search)) {
