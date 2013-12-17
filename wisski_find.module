@@ -831,7 +831,7 @@ function wisski_find_add_groups() {
     if($item['hidden'] == 0) { 
 
       if(module_exists("menu_per_role")) {
-        if(is_null(_menu_per_role_access($id))) {
+        if(is_null(_menu_per_role_access($item))) {
       	  $string = '<dt>' . l($data['name'], ("find/" . $group)) . '</dt>';
       	  if(!empty($data['description']))
       	    $string .= '<dd>' . $data['description'] . '</dd>';
