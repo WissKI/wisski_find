@@ -26,12 +26,23 @@ function wisski_find_menu () {
     'type' => MENU_NORMAL_ITEM,
     'access arguments' => array('wisski access templateView'),
   );
-  $item['find/%wisski_find_group/result/%'] = array(
+  $item['find/%wisski_find_group/result/%wisski_find_result'] = array(
     'title' => '',
     'title callback' => 'wisski_find_titleResult',
-    'title arguments' => array(1),
+    'title arguments' => array(1, 3),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('wisski_find_showResult', 1, 3),
+//    'page callback' => 'wisski_find_showResult',
+//    'page arguments' => array(1, 3),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('wisski access templateView'),
+  );
+  $item['find/result/%wisski_find_result'] = array(
+    'title' => '',
+    'title callback' => 'wisski_find_titleResult',
+    'title arguments' => array(NULL, 2),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_find_showResult', NULL, 3),
 //    'page callback' => 'wisski_find_showResult',
 //    'page arguments' => array(1, 3),
     'type' => MENU_CALLBACK,
@@ -74,9 +85,28 @@ function wisski_find_menu () {
 */
 function wisski_find_group_load($id) {
 
- include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
- return wisski_pathbuilder_getPathData($id);
+  include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+  return wisski_pathbuilder_getPathData($id);
 
+}
+
+
+function wisski_find_result_load($sid) {
+
+  $tmp = db_query("SELECT * FROM {wisski_find} WHERE sid = '%s'", $sid);
+  $record = db_fetch_array($tmp);
+
+  if (!$record) {
+    drupal_set_message('The search result was deleted from cache already. Try a new search.', 'error');
+  }
+  return $record;
+
+}
+
+
+function wisski_find_cron() {
+    // delete all non-permanent results older than one day
+  db_query("DELETE FROM {wisski_find} WHERE status = %d and timestamp < %d", CACHE_TEMPORARY, variable_get('wisski_find_cache_expires', time() - 60 * 60 * 24));
 }
 
 
@@ -159,8 +189,15 @@ function wisski_find_title($group) {
 
 /* Callback for result page title
 */
-function wisski_find_titleResult($group) {
-  return t('Search results for ') . " " . $group['name'];
+function wisski_find_titleResult($group, $record) {
+
+  if ($record && $record['name']) {
+    return $record['name'];
+  } elseif ($group) {
+    return t('Search results for @group', array('@group' => $group['name']));
+  } else {
+    return t('Search results');
+  }
 }
 
 
@@ -253,7 +290,7 @@ function _wisski_find_getSearchPaths($group, $indentg = '', $indentp = '', $inde
 /** Build the search form.
 *
 */
-function wisski_find_selectPaths2(&$form_state, $group) {
+function wisski_find_selectPaths2(&$form_state, $group, $id = '') {
 
   include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
   
@@ -308,7 +345,12 @@ function wisski_find_selectPaths2(&$form_state, $group) {
     '#type' => 'submit',
     '#value' => t('Search'),
   );
-
+  
+  if ($id == '') $id = wisski_get_uid();
+  $form['sid'] = array(
+    '#type' => 'hidden',
+    '#value' => $id,
+  );
   
   return $form;
   
@@ -383,7 +425,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
     // the results are cached with a generic id
     // the id is stored in the form state and will
     // be used to redirect the user to the result view page
-    global $base_root, $base_path;
+    global $user, $base_root, $base_path;
     $group = $form_state['storage']['group'];
     
     // tune the results so that they are sorted by their displayed title
@@ -391,9 +433,24 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
     
     $form_state['storage']['result'] = $uris;
     drupal_load('module', 'wisski');
-    $id = wisski_get_uid();
+
+    $id = $form_state['values']['sid'];
+    $status = FALSE;
+    if ($id == '') {
+      $id = wisski_get_uid();
+    } else {
+      $status = db_result(db_query("SELECT status FROM {wisski_find} WHERE sid = %d", $id));
+    }
+    if ($status === FALSE) $status = CACHE_TEMPORARY;
+
+/*    
+    cache_set("wisski_find_search_$id", $search, 'cache', CACHE_TEMPORARY);
     cache_set("wisski_find_result_$id", $uris, 'cache', CACHE_TEMPORARY);
+*/
+    db_query("INSERT INTO {wisski_find} (`sid`, `name`, `uid`, `gid`, `search`, `result`, `timestamp`, `status`) VALUES ('%s', '', %d, %d, %b, %b, %d, %d)", $id, $user->uid, $group, serialize($search), serialize($uris), time(), $status);
+
     $form_state['storage']['result_url'] = $form_state['redirect'] = "$base_root${base_path}find/$group/result/$id";
+
   }
 
 }
@@ -455,7 +512,7 @@ function wisski_find_tuneResults($group, $uris) {
 * For a big result set, split into multiple pages.
 *
 */
-function wisski_find_showResult($form_state, $group, $id) {
+function wisski_find_showResult($form_state, $group, $record) {
   global $base_root, $base_path;
   // Get the standard drupal pager support
   global $pager_page_array, $pager_total, $pager_total_items;
@@ -463,14 +520,16 @@ function wisski_find_showResult($form_state, $group, $id) {
   $pager_page_array = explode(',', $page);
   
   // fetch the uris from the cache
+/*
   $uris = cache_get("wisski_find_result_$id");
   $uris = $uris->data;
-
-  if (!$uris) {
-    drupal_set_message('The search result was deleted from cache already. Try a new search.', 'error');
-    drupal_goto("$base_root${base_path}find");
-    return;
+*/
+  if ($group == NULL) {
+    module_load_include('inc', 'wisski_pathbuilder');
+    $group = wisski_pathbuilder_getPathData($record['gid']);
   }
+
+  $uris = unserialize(db_decode_blob($record['result']));
   
   $limit = variable_get('wisski_find_resultItemsPerPage', 30);
   
@@ -573,17 +632,106 @@ function wisski_find_showResult($form_state, $group, $id) {
     '#type' => 'image_button',
     '#attributes' => array('src' => base_path() . 'sites/all/modules/wisski_find/export_excel.png', 'alt' => t('Export to Excel')), 
     '#submit' => array('wisski_find_export'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
   );
+  
+  // 
+  $form['store'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Bookmark this search result',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['sid'] = array(
+    '#type' => 'hidden',
+    '#value' => $record['sid'],
+  );
+  if ($record['status'] == CACHE_TEMPORARY) {
+    $form['store']['#description'] = t('<p>This search result can be access with <a href="!l">this URL</a>. It will be cached one day.</p><p>If you want to bookmark this result list permanently, you can save it by clicking on the button below. Optionally, you can also give it a name.</p>', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/result/' . $record['sid'])));
+    $form['store']['store_name'] = array(
+      '#type' => 'textfield',
+      '#title' => 'Name',
+    );
+    $form['store']['store_submit'] = array(
+      '#type' => 'submit',
+      '#value' => 'Save',
+      '#submit' => array('wisski_find_save_record'),
+    );
+  } else {
+    $form['store']['#description'] = t('<p>This search result can be access with <a href="!l">this URL</a>. It is saved permanently.</p><p>If you wish to delete this result, click on the button below.</p>', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/result/' . $record['sid'])));
+    $form['store']['store_delete'] = array(
+      '#type' => 'submit',
+      '#value' => 'Delete',
+      '#submit' => array('wisski_find_delete_record'),
+    );
+  }
   
   return $form;
 }
+
+
+function wisski_find_save_record($form, $form_state) {
+  
+  $sid = $form_state['values']['sid'];
+  $name = trim($form_state['values']['store_name']);
+
+  $gid = db_result(db_query("SELECT gid FROM {wisski_find} WHERE sid = '%s'", $sid));
+  if ($gid !== FALSE) {
+    global $base_root, $base_path;
+    db_query("UPDATE {wisski_find} SET `status` = %d, `name` = '%s' WHERE sid = '%s'", CACHE_PERMANENT, $name, $sid);
+    $msg = ' ' . t('You may access the results using <a href="!l">this URL</a>.', array('!l' => url($base_root . $base_path . 'find/' . $gid . '/result/' . $sid)));
+    if ($name != '') {
+      drupal_set_message(t('Search result saved successfully as %name.', array('%name' => $name)) . $msg);
+    } else {
+      drupal_set_message(t('Search result saved successfully.') . $msg);
+    }
+  } else {
+    drupal_set_message(t('Bad search result ID: @id', array('@id' => $sid)), 'error');
+  }
+
+  
+}
+
+
+/** Submit handler for deleting a result
+*/
+function wisski_find_delete_record($form, $form_state) {
+  
+  $sid = $form_state['values']['sid'];
+  $check = db_result(db_query("SELECT status FROM {wisski_find} WHERE sid = '%s'", $sid));
+  if ($check !== FALSE) {
+    db_query("DELETE FROM {wisski_find} WHERE sid = '%s'", $sid);
+    drupal_set_message(t('Search result deleted successfully.'));
+    global $base_root, $base_path;
+    drupal_goto($base_root . $base_path . 'find');
+  } else {
+    drupal_set_message(t('Bad search result ID: @id', array('@id' => $sid)), 'error');
+  }
+
+}
+
+
 
 function wisski_find_export($form, $form_state) {
   
   $id = arg(3);
   $groupname = arg(1);
-  $uris = cache_get("wisski_find_result_$id");
-  $uris = $uris->data;
+//  $uris = cache_get("wisski_find_result_$id");
+//  $uris = $uris->data;
+  
+  $tmp = db_query("SELECT * FROM {wisski_find} WHERE sid = '%s'", $id);
+  $record = db_fetch_array($tmp);
+  
+  if (!$record) {
+    drupal_set_message('The search result was deleted from cache already. Try a new search.', 'error');
+    drupal_goto("$base_root${base_path}find");
+    return;
+  }
+
+  $uris = unserialize(db_decode_blob($record['result']));
   
   $filename = file_directory_temp() . "/" . $id . ".xls";
 

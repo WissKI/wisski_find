@@ -1,0 +1,77 @@
+<?php
+/*
+*@author Martin Scholz, unless otherwise said
+*/
+
+/**
+* @author Martin Scholz
+*/
+function wisski_find_schema () {
+
+  $schemas = array();
+
+  $schemas['wisski_find'] = array(
+    'fields' => array(
+      'sid' => array(
+        'type' => 'varchar',
+        'length' => '40',
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'size' => 'normal',
+        'default' => 0,
+      ),
+      'gid' => array(
+        'type' => 'int',
+        'size' => 'normal',
+        'not null' => TRUE,
+      ),
+      'search' => array(
+        'type' => 'blob',
+        'size' => 'normal',
+        'not null' => TRUE,
+      ),
+      'result' => array(
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'size' => 'normal',
+        'default' => 0,
+      ),
+      'status' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'default' => CACHE_TEMPORARY,
+      ),
+    ),
+    'primary key' => array('sid'),
+  );
+
+  return $schemas;
+
+}
+
+
+/**
+* @author Martin Scholz
+*/
+function wisski_find_install () {
+  drupal_install_schema('wisski_find');
+}
+
+
+/**
+* @author Martin Scholz
+*/
+function wisski_find_uninstall () {
+  drupal_uninstall_schema('wisski_find');
+}
