@@ -6,6 +6,17 @@
 */
 
 
+// refresh search results 
+define('WISSKI_FIND_REFRESH', 512); 
+
+
+function wisski_find_perm() {
+  
+  return array('use wisski find', 'save wisski find results', 'directly access wisski find');
+
+}
+
+
 /** Implemenation of hook_menu
 */
 function wisski_find_menu () {
@@ -25,6 +36,13 @@ function wisski_find_menu () {
     'page arguments' => array('wisski_find_selectPaths2', 1),
     'type' => MENU_NORMAL_ITEM,
     'access arguments' => array('wisski access templateView'),
+  );
+  $item["find/%wisski_find_group/do"] = array(
+    'title' => 'Find',
+    'page callback' => 'wisski_find_do_find',
+    'page arguments' => array(1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('directly access wisski find'),
   );
   $item['find/%wisski_find_group/result/%wisski_find_result'] = array(
     'title' => '',
@@ -413,10 +431,8 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
   }
 
   // search the data
-  include_once(drupal_get_path('module', 'wisski_find') . "/search.inc");
-  $uris = wisski_find_search($search);
-
-  
+  $group = $form_state['storage']['group'];
+  $uris = wisski_find_build_result_list($group, $search);
 
   if (count($uris) == 0) {
     // there are no results
@@ -426,10 +442,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
     // the id is stored in the form state and will
     // be used to redirect the user to the result view page
     global $user, $base_root, $base_path;
-    $group = $form_state['storage']['group'];
     
-    // tune the results so that they are sorted by their displayed title
-    $uris = wisski_find_tuneResults($group, $uris);
     
     $form_state['storage']['result'] = $uris;
     drupal_load('module', 'wisski');
@@ -462,7 +475,24 @@ function wisski_find_selectPaths2_submit(&$form, &$form_state) {
   drupal_goto($form_state['storage']['result_url']);
 }
 
-function wisski_find_tuneResults($group, $uris) {
+
+function wisski_find_build_result_list($group, $search, $user = NULL) {
+
+  // search the data
+  include_once(dirname(__FILE__) . "/search.inc");
+  $uris = wisski_find_search($search);
+  if (empty($uris)) return array();
+
+  // tune the result list
+  
+  // sort out instances that are not accessable for the current user
+  foreach ($uris as $uri => $v) {
+    $node = node_load(array('nid' => wisski_store_get_nid_for_instance($uri)));
+    if (!$node || !node_access('view', $node, $user)) unset($uris[$uri]);
+  }
+
+  // what follows is mainly the former function wisski_find_tuneResults()
+  
   $urirank = array();
   foreach ($uris as $uri => $pids) {
     //$urirank[$uri] = count($pids);
@@ -528,10 +558,23 @@ function wisski_find_showResult($form_state, $group, $record) {
     module_load_include('inc', 'wisski_pathbuilder');
     $group = wisski_pathbuilder_getPathData($record['gid']);
   }
+  if ($group == FALSE) {
+    drupal_set_message(t('Bad search options: Unknown group: @gid', array('@gid' => $record['gid'])));
+    return;
+  }
 
-  $uris = unserialize(db_decode_blob($record['result']));
   
-  $limit = variable_get('wisski_find_resultItemsPerPage', 30);
+  // if the list has the refresh flag we update the list
+  // if it is older than the setting says (default: one day)
+  if ($record['status'] == WISSKI_FIND_REDO && $record['timestamp'] < time() - variable_get('wisski_find_result_list_expires', 60 * 60 * 24)) {
+    $search = unserialize(db_decode_blob($record['search']));
+    $uris = wisski_find_build_result_list($group, $search, user_load($record['user']));
+    db_query("UPDATE {wisski_find} SET result = %b, timestamp = %d WHERE sid = '%s'", serialize($uris), time(), $record['sid']);
+  } else {
+    $uris = unserialize(db_decode_blob($record['result']));
+  }
+  
+  $limit = variable_get('wisski_find_resultItemsPerPage_' . $group['id'], variable_get('wisski_find_resultItemsPerPage', 30));
   
   // total sum of uris
   $sum = count($uris);
@@ -554,13 +597,13 @@ function wisski_find_showResult($form_state, $group, $record) {
   $form['heading'] = array(
     '#prefix' => '<label>',
     '#suffix' => '</label>',
-    '#value' => t("Hits") . " " . $begin . " - " . min($end,$max) . " " . t("of") . " " . $max . ":",
+    '#value' => t("Hits @s - @e of @m:", array('@s' => $begin, '@e' => min($end,$max), '@m' => $max)),
   );
 
   // get the correct style. This is used below.
-  $style = variable_get('wisski_find_styleResultPage', 'list');
+  $style = variable_get('wisski_find_styleResultPage_' . $group['id'], variable_get('wisski_find_styleResultPage', 'list'));
   // images? suppose yes!
-  $image_support = variable_get('wisski_find_imageSupport', 'yes');
+  $image_support = variable_get('wisski_find_imageSupport_' . $group['id'], variable_get('wisski_find_imageSupport', 'yes'));
 
   // track the number of items
   $i = 0;
@@ -637,6 +680,10 @@ function wisski_find_showResult($form_state, $group, $record) {
   );
   
   // 
+  $form['sid'] = array(
+    '#type' => 'hidden',
+    '#value' => $record['sid'],
+  );
   $form['store'] = array(
     '#type' => 'fieldset',
     '#title' => 'Bookmark this search result',
@@ -645,27 +692,77 @@ function wisski_find_showResult($form_state, $group, $record) {
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
   );
-  $form['sid'] = array(
-    '#type' => 'hidden',
-    '#value' => $record['sid'],
+  $form['store']['list_wrap_begin'] = array(
+    '#type' => 'markup',
+    '#value' => '<ul>',
+    '#weight' => 0,
   );
+  $form['store']['list_wrap_end'] = array(
+    '#type' => 'markup',
+    '#value' => '</ul>',
+    '#weight' => 1000,
+  );
+
+  // fill the bookmark fieldset depending on
+  // the status of the list and user permissions
   if ($record['status'] == CACHE_TEMPORARY) {
-    $form['store']['#description'] = t('<p>This search result can be access with <a href="!l">this URL</a>. It will be cached one day.</p><p>If you want to bookmark this result list permanently, you can save it by clicking on the button below. Optionally, you can also give it a name.</p>', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/result/' . $record['sid'])));
-    $form['store']['store_name'] = array(
-      '#type' => 'textfield',
-      '#title' => 'Name',
+    $form['store']['note_temp'] = array(
+      '#type' => 'markup',
+      '#prefix' => '<li>',
+      '#suffix' => '</li>',
+      '#value' => t('You can access this search result with <a href="!l">this URL</a>. It will be cached approximately one day.', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/result/' . $record['sid']))),
+      '#weight' => 200,
     );
-    $form['store']['store_submit'] = array(
-      '#type' => 'submit',
-      '#value' => 'Save',
-      '#submit' => array('wisski_find_save_record'),
-    );
+
+    if (user_access('save wisski find results')) {
+      $form['store']['note_save'] = array(
+        '#type' => 'markup',
+        '#prefix' => '<li>',
+        '#suffix' => '</li>',
+        '#value' => t('You can bookmark this result list permanently by clicking on the button below. Optionally, you can also give it a name and specify whether it should be updated.'),
+        '#weight' => 400,
+      );
+      $form['store']['note_save']['store_name'] = array(
+        '#type' => 'textfield',
+        '#title' => 'Name',
+        '#description' => t('This string will be displayed as page title.'),
+        '#weight' => 410,
+      );
+      $form['store']['note_save']['store_refresh'] = array(
+        '#type' => 'checkbox',
+        '#title' => 'Refresh the result list',
+        '#description' => t('If checked, the result list will be updated regularly. If unchecked, the list will remain as is, without reflecting changes in the data.'),
+        '#weight' => 420,
+      );
+      $form['store']['note_save']['store_submit'] = array(
+        '#type' => 'submit',
+        '#value' => 'Save',
+        '#submit' => array('wisski_find_save_record'),
+        '#weight' => 430,
+      );
+    }
   } else {
-    $form['store']['#description'] = t('<p>This search result can be access with <a href="!l">this URL</a>. It is saved permanently.</p><p>If you wish to delete this result, click on the button below.</p>', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/result/' . $record['sid'])));
+    $form['store']['note_delete'] = array(
+      '#type' => 'markup',
+      '#prefix' => '<li>',
+      '#suffix' => '</li>',
+      '#value' => t('You can delete the result list by clicking the button below.'),
+      '#weight' => 400,
+    );
     $form['store']['store_delete'] = array(
       '#type' => 'submit',
       '#value' => 'Delete',
       '#submit' => array('wisski_find_delete_record'),
+      '#weight' => 410,
+    );
+  }
+  if ($record['status'] != WISSKI_FIND_REFRESH && user_access('directly access wisski find')) {
+    $form['store']['note_new'] = array(
+      '#type' => 'markup',
+      '#prefix' => '<li>',
+      '#suffix' => '</li>',
+      '#value' => t('You can start this search anew with <a href="!l">this URL</a>.', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/do', array('query' => array('search' => drupal_to_js(unserialize(db_decode_blob($record['search'])))))))),
+      '#weight' => 100,
     );
   }
   
@@ -1017,7 +1114,48 @@ function wisski_find_enable() {
 }
 
   
+function wisski_find_do_find($group) {
+  
+  $options = (object) array(
+    'sid' => '',
+    'status' => CACHE_TEMPORARY,
+    'name' => '',
+  );
+  wisski_parse_http_params($options, 'options');
+  $search = array();
+  $search = wisski_parse_http_params($search, 'search');
+  if (empty($search)) {
+    drupal_set_message(t('Bad search parameter'));
+    return;
+  }
+  $search = (array) $search;
+  
+  $sid = trim($options->sid);
+  if (empty($sid)) $sid = wisski_get_uid();
+  
+  $u = db_result(db_query("SELECT uid FROM {wisski_find} WHERE sid = '%s'", $sid));
+  if ($u !== FALSE) $u = user_load($u);
 
+  // (re)build the result list
+  // if we rebuild the list, we do it as if the original user did it
+  // if it's a new search, use the current user
+  $uris = wisski_find_build_result_list($group, $search, $u);
 
+  if ($u !== FALSE) {
+    // we update an existing result list
+    db_query("UPDATE {wisski_find} SET result = %b, timestamp = %d WHERE sid = '%s'", serialize($uris), time(), $sid);
+  } else {
+    // insert a new result list
+    global $user;
+    // check permission to save a result
+    if (!user_access('save wisski find results', $user)) $options->status = CACHE_TEMPORARY;
+
+    db_query("INSERT INTO {wisski_find} (sid, name, uid, gid, search, result, timestamp, status) VALUES ('%s', '%s', %d, %d, %b, %b, %d, %d)", $sid, $options->name, $user->uid, $group['id'], serialize($search), serialize($uris), time(), $options->status);
+
+  }
+
+  drupal_goto('find/' . $group['id'] . '/result/' . $sid);
+  
+}
 
 
