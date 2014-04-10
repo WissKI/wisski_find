@@ -183,6 +183,15 @@ function wisski_find_visualSettings() {
     '#default_value' => variable_get('wisski_find_imageSupport', 'yes'),
   );
 
+  $form['wisski_find_fieldset']['wisski_find_default_op'] = array(
+    '#type' => 'select',
+    '#title' => t('Default operator'),
+    '#description' => t('By default, search fields will be combined with this operator'),
+    '#default_value' => 'OR',
+    '#options' => array('OR' => t('OR'), 'AND' => t('AND')),
+    '#default_value' => variable_get('wisski_find_default_op', 'OR'),
+  );
+
   return $form;
 
 }
@@ -944,7 +953,7 @@ function _wisski_find_searchField($group, $id, $has_operator = TRUE, $toplevel =
       ($has_operator) ? 
       array(
         '#type' => 'select',
-        '#default_value' => 'OR',
+        '#default_value' => variable_get('wisski_find_default_op', 'OR'),
         '#options' => array('OR' => t('OR'), 'AND' => t('AND')),
       )
       :
