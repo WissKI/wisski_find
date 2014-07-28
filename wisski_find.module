@@ -216,7 +216,7 @@ function wisski_find_title($group) {
 
 /* Callback for result page title
 */
-function wisski_find_titleResult($group, $record) {
+function wisski_find_titleResult($group, $record = NULL) {
 
   if ($record && $record['name']) {
     return $record['name'];
@@ -408,6 +408,8 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
 //        'match' => ($vals["match_mode_$fid"]) ? 'exact' : 'like',
 //        'not_empty' => $vals["not_empty_$fid"],
       );
+      
+      /*
       if(!$vals["not_empty_$fid"])
         if($vals["match_mode_$fid"])
           $path_struct['match'] = 'exact';
@@ -415,6 +417,33 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
           $path_struct['match'] = 'like';
       else
         $path_struct['match'] = 'not_empty';
+      */
+      
+      if($vals["not_empty_$fid"])
+        $path_struct['match'] = 'not_empty';
+      else {
+        switch($vals["match_mode_$fid"]) {
+          case "fuzzy_$fid":
+            $path_struct['match'] = 'like';
+            break;
+          case "exact_$fid":
+            $path_struct['match'] = 'exact';
+            break;
+          case "smaller_$fid":
+            $path_struct['match'] = 'smaller';
+            break;
+          case "smallerequal_$fid":
+            $path_struct['match'] = 'smallerequal';
+            break;
+          case "bigger_$fid":
+            $path_struct['match'] = 'bigger';
+            break;
+          case "biggerequal_$fid":
+            $path_struct['match'] = 'biggerequal';
+            break;
+        }
+      }
+      
       $structs[] = $path_struct;
     }
 
@@ -461,7 +490,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
     if ($id == '') {
       $id = wisski_get_uid();
     } else {
-      $status = db_result(db_query("SELECT status FROM {wisski_find} WHERE sid = %d", $id));
+      $status = db_result(db_query("SELECT status FROM {wisski_find} WHERE sid = '%s'", $id));
     }
     if ($status === FALSE) $status = CACHE_TEMPORARY;
 
@@ -616,6 +645,7 @@ function wisski_find_showResult($form_state, $group, $record) {
 
   // track the number of items
   $i = 0;
+  
   // go through all uris
   foreach($uris as $uri => $pids) {
     $i++;
@@ -968,14 +998,41 @@ function _wisski_find_searchField($group, $id, $has_operator = TRUE, $toplevel =
       '#size' => 30,
       '#default_value' => "",
     ),
+    
+    "match_mode_$id" => array(
+      '#type' => 'select',
+      '#options' => array("fuzzy_$id" => t('any match'), "exact_$id" => t('exact match'), "smaller_$id" => t('smaller than'), "smallerequal_$id" => t('smaller or equal than'), "bigger_$id" => t('bigger than'), "biggerequal_$id" => t('bigger or equal than'),),
+      '#default_value' => "fuzzy_$id",
+    ),
+    
+    /*
     "match_mode_$id" => array(
       '#type' => 'checkbox',
       '#title' => t('exact match'),
     ),
+    */
     "not_empty_$id" => array(
       '#type' => 'checkbox',
       '#title' => t('not empty'),
     ),
+    /*
+    "smaller_$id" => array(
+      '#type' => 'checkbox',
+      '#title' => t('<'),
+    ),
+    "smallerequal_$id" => array(
+      '#type' => 'checkbox',
+      '#title' => t('<='),
+    ),
+    "bigger_$id" => array(
+      '#type' => 'checkbox',
+      '#title' => t('>'),
+    ),
+    "biggerequal_$id" => array(
+      '#type' => 'checkbox',
+      '#title' => t('>='),
+    ),
+    */
   );
 
   return array($id, $form);

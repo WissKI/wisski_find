@@ -102,6 +102,14 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
     $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER regex(?out, "' . str_replace('"', '\\"', $term) . '", "i") ', FALSE);
   } elseif($match_op == 'not_empty') {
     $q = wisski_pathbuilder_get_sparql($pathid, '', FALSE);
+  } elseif ($match_op == 'smaller') {
+    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out < "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
+  } elseif ($match_op == 'smallerequal') {
+    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out <= "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
+  } elseif ($match_op == 'bigger') {
+    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out > "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
+  } elseif ($match_op == 'biggerequal') {
+    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out >= "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
   } else {
     drupal_set_message("Invalid matching mode: '$match_op'", 'error');
   }
