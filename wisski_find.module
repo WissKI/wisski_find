@@ -469,8 +469,11 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
   }
 
   // search the data
+  // this is just the number. The function wants the array.
   $group = $form_state['storage']['group'];
-  $uris = wisski_find_build_result_list($group, $search);
+  module_load_include('inc', 'wisski_pathbuilder');
+  $grouparr = wisski_pathbuilder_getPathData($group);
+  $uris = wisski_find_build_result_list($grouparr, $search);
 
   if (count($uris) == 0) {
     // there are no results
