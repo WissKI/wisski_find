@@ -72,6 +72,20 @@ function _wisski_find_searchOP($search, $store, $namespaces) {
 
     return $ret;
 
+  } elseif ($op == 'NOT') {
+    
+    $ret = wisski_find_search($args[0], $store, $namespaces);
+    for ($i = 1; $i < $l; $i++) {
+      $ret1 = array();
+      $nret = wisski_find_search($args[$i], $store, $namespaces);
+      foreach($ret as $uri => $cnt) {
+        if (!isset($nret[$uri])) $ret1[$uri] = $ret[$uri];
+      }
+      $ret = $ret1;
+    }
+
+    return $ret;
+
   }
  
 }
