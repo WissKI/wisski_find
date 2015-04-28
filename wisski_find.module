@@ -856,43 +856,42 @@ function wisski_find_delete_record($form, $form_state) {
 
 function wisski_find_export($form, $form_state) {
   
+  // the id for the search and thus for the filename
   $id = arg(3);
-  $groupname = arg(1);
-//  $uris = cache_get("wisski_find_result_$id");
-//  $uris = $uris->data;
   
+  // the id of the group
+  $groupid = arg(1);
+
+  // get the data for the search  
   $tmp = db_query("SELECT * FROM {wisski_find} WHERE sid = '%s'", $id);
   $record = db_fetch_array($tmp);
   
+  // if it is already deleted, bad luck...
   if (!$record) {
     drupal_set_message('The search result was deleted from cache already. Try a new search.', 'error');
     drupal_goto("$base_root${base_path}find");
     return;
   }
 
+  // get the relevant uris
   $uris = unserialize(db_decode_blob($record['result']));
   
+  // open a temporary file
   $filename = file_directory_temp() . "/" . $id . ".xls";
 
   $fh = fopen($filename, "w+");
-
-  $groupquery = "SELECT * FROM {wisski_template} WHERE name = '" . $groupname . "'";
-  
-  $result = db_query($groupquery);
-  $grouparr = db_fetch_array($result);
-  $groupid = $grouparr['id'];
   
   $pathIds = wisski_pathbuilder_getEnabledInternaMembers($groupid, TRUE, TRUE);
   
   foreach($pathIds as $pathid) {
     $pathdata = wisski_pathbuilder_getPathData($pathid);
-    fwrite($fh, $pathdata['name'] . "\t");
+    fwrite($fh, iconv('UTF-8', 'cp1250', $pathdata['name']) . "\t");
   }
   fwrite($fh, "\n");
   
   foreach($uris as $uri => $values) {
     foreach($pathIds as $pathid) {
-      $sparql = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?x0 = <' . $uri . '> )', FALSE, 0, FALSE);
+      $sparql = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?x0 = <' . $uri . '> )', FALSE, 0, FALSE, array('?out'));
       
       $sprows = wisski_store_getObj()->wisski_ARCAdapter_getStore()->query($sparql, 'rows');
 
