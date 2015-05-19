@@ -269,10 +269,14 @@ function wisski_find_selectGroup() {
 /**
 */
 function _wisski_find_getSearchPaths($group, $indentg = '', $indentp = '', $indent) {
+  
+  $ftype = wisski_pathbuilder_getPathbuilderTrees();
+  $ftype = array_search('Find', $ftype);
+  if ($ftype === FALSE) $ftype = 2;
 
   $ids = "";
   $pds = array(); // pathdata array
-  foreach (wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE) as $id) $pds[] = wisski_pathbuilder_getPathData($id);
+  foreach (wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE, FALSE, $ftype) as $id) $pds[] = wisski_pathbuilder_getPathData($id);
   
   $paths = array();
   
@@ -320,6 +324,10 @@ function _wisski_find_getSearchPaths($group, $indentg = '', $indentp = '', $inde
 function wisski_find_selectPaths2(&$form_state, $group, $id = '') {
 
   include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+
+  $ftype = wisski_pathbuilder_getPathbuilderTrees();
+  $ftype = array_search('Find', $ftype);
+  if ($ftype === FALSE) $ftype = 2;
   
   if ($group === NULL) {
     drupal_set_message("not a valid group.", 'error');
@@ -344,7 +352,7 @@ function wisski_find_selectPaths2(&$form_state, $group, $id = '') {
     // all paths that are directly under the top group
     // and aggregate fields for groups under top group
     // and one "all fields" field 
-    $nof = count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE)) + 1; // plus one extra for "all fields"
+    $nof = count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE, FALSE, $ftype)) + 1; // plus one extra for "all fields"
   } elseif ($nof > 0) {
     // a fixed number of fields
     // # $nof of fields
@@ -356,7 +364,7 @@ function wisski_find_selectPaths2(&$form_state, $group, $id = '') {
     // all paths
     // make a field for each defined path
     // don't make aggregate fields for groups
-    $nof = count(_wisski_find_getSearchPaths($group, '','','')) - count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE)) + count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], FALSE)) - 1;
+    $nof = count(_wisski_find_getSearchPaths($group, '','','')) - count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE, FALSE, $ftype)) + count(wisski_pathbuilder_getEnabledInternaMembers($group['id'], FALSE, FALSE, $ftype)) - 1;
     $toplevel = FALSE;
   }
   
@@ -478,6 +486,7 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
   if (count($uris) == 0) {
     // there are no results
     form_set_error('', 'No items found. Please widen your search.');
+    drupal_set_message(t('Nicht oder nicht das richtige gefunden? Melden Sie sich bei Fragen und Anregungen gerne unter:<br/> &nbsp; Tel: 0911 5302574<br/> &nbsp; Fax: 0911 5302 96507<br/> &nbsp; Mail: <a href="mailto:schulmuseum@fau.de">schulmuseum@fau.de</a>'), "info");
   } else {
     // the results are cached with a generic id
     // the id is stored in the form state and will
@@ -880,8 +889,12 @@ function wisski_find_export($form, $form_state) {
   $filename = file_directory_temp() . "/" . $id . ".xls";
 
   $fh = fopen($filename, "w+");
+
+  $ftype = wisski_pathbuilder_getPathbuilderTrees();
+  $ftype = array_search('Find', $ftype);
+  if ($ftype === FALSE) $ftype = 2;
   
-  $pathIds = wisski_pathbuilder_getEnabledInternaMembers($groupid, TRUE, TRUE);
+  $pathIds = wisski_pathbuilder_getEnabledInternaMembers($groupid, TRUE, TRUE, $ftype);
   
   foreach($pathIds as $pathid) {
     $pathdata = wisski_pathbuilder_getPathData($pathid);
@@ -936,8 +949,12 @@ function wisski_find_export($form, $form_state) {
 */
 function wisski_pathbuilder_getPathOrder($group) {
   
+  $ftype = wisski_pathbuilder_getPathbuilderTrees();
+  $ftype = array_search('Find', $ftype);
+  if ($ftype === FALSE) $ftype = 2;
+ 
   $order = array();
-  foreach(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE) as $id) {
+  foreach(wisski_pathbuilder_getEnabledInternaMembers($group['id'], TRUE, FALSE, $ftype) as $id) {
     
     $path = wisski_pathbuilder_getPathData($id);
     if ($path['is_group']) {
@@ -951,7 +968,6 @@ function wisski_pathbuilder_getPathOrder($group) {
   return $order;
   
 }
-  
   
 
 /** Build a search field, ie. a row in the search field table
