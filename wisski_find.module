@@ -7,7 +7,9 @@
 
 
 // refresh search results 
-define('WISSKI_FIND_REFRESH', 512); 
+define('WISSKI_FIND_REFRESH', 1); 
+define('WISSKI_FIND_STATIC', 2);
+// we also use CACHE_TEMPORARY as 3rd option
 
 
 function wisski_find_perm() {
@@ -486,7 +488,6 @@ function wisski_find_selectPaths2_validate($form, &$form_state) {
   if (count($uris) == 0) {
     // there are no results
     form_set_error('', 'No items found. Please widen your search.');
-    drupal_set_message(t('Nicht oder nicht das richtige gefunden? Melden Sie sich bei Fragen und Anregungen gerne unter:<br/> &nbsp; Tel: 0911 5302574<br/> &nbsp; Fax: 0911 5302 96507<br/> &nbsp; Mail: <a href="mailto:schulmuseum@fau.de">schulmuseum@fau.de</a>'), "info");
   } else {
     // the results are cached with a generic id
     // the id is stored in the form state and will
@@ -584,7 +585,7 @@ function wisski_find_build_result_list($group, $search, $user = NULL) {
       $outuris[$uri][0]['title'] = $title;
     }
   }
-  
+
   return $outuris;
 }
 
@@ -612,11 +613,10 @@ function wisski_find_showResult($form_state, $group, $record) {
     drupal_set_message(t('Bad search options: Unknown group: @gid', array('@gid' => $record['gid'])));
     return;
   }
-
   
   // if the list has the refresh flag we update the list
   // if it is older than the setting says (default: one day)
-  if ($record['status'] == WISSKI_FIND_REDO && $record['timestamp'] < time() - variable_get('wisski_find_result_list_expires', 60 * 60 * 24)) {
+  if ($record['status'] == WISSKI_FIND_REFRESH && $record['timestamp'] < time() - variable_get('wisski_find_cache_expires', 60 * 60 * 24)) {
     $search = unserialize(db_decode_blob($record['search']));
     $uris = wisski_find_build_result_list($group, $search, user_load($record['user']));
     db_query("UPDATE {wisski_find} SET result = %b, timestamp = %d WHERE sid = '%s'", serialize($uris), time(), $record['sid']);
@@ -825,11 +825,12 @@ function wisski_find_save_record($form, $form_state) {
   
   $sid = $form_state['values']['sid'];
   $name = trim($form_state['values']['store_name']);
+  $status = $form_state['values']['store_refresh'] ? 1 : 2; 
 
   $gid = db_result(db_query("SELECT gid FROM {wisski_find} WHERE sid = '%s'", $sid));
   if ($gid !== FALSE) {
     global $base_root, $base_path;
-    db_query("UPDATE {wisski_find} SET `status` = %d, `name` = '%s' WHERE sid = '%s'", CACHE_PERMANENT, $name, $sid);
+    db_query("UPDATE {wisski_find} SET `status` = %d, `name` = '%s' WHERE sid = '%s'", $status, $name, $sid);
     $msg = ' ' . t('You may access the results using <a href="!l">this URL</a>.', array('!l' => url($base_root . $base_path . 'find/' . $gid . '/result/' . $sid)));
     if ($name != '') {
       drupal_set_message(t('Search result saved successfully as %name.', array('%name' => $name)) . $msg);

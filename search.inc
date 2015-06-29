@@ -16,6 +16,8 @@
 * )
 */
 function wisski_find_search($search, $store = NULL, $namespaces = array()) {
+  
+  $search = (array) $search;
 
   if ($store === NULL) {
     drupal_load('module', 'wisski_store');
