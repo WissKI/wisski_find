@@ -130,6 +130,7 @@ function wisski_find_cron() {
 }
 
 
+
 /**Get group info using the groups name
 * @return the first entry in db for which its name is $name
 *
@@ -185,6 +186,14 @@ function wisski_find_visualSettings() {
     '#default_value' => variable_get('wisski_find_imageSupport', 'yes'),
   );
 
+  $form['wisski_find_fieldset']['wisski_find_cache_expires'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Result list refresh'),
+    '#description' => t('Bookmarked result lists will be updated after this period. The value is in seconds and must be a positive integer. A "0" means that it will be updated on each use.'),
+    '#default_value' => variable_get('wisski_find_cache_expires', 24 * 60 * 60),
+    '#element_validate' => array('_wisski_find_cache_expires_validate'),
+  );
+
   $form['wisski_find_fieldset']['wisski_find_default_op'] = array(
     '#type' => 'select',
     '#title' => t('Default operator'),
@@ -206,6 +215,15 @@ function wisski_find_form_alter(&$form, &$form_state, $form_id) {
     $form[] = (wisski_find_visualSettings());  
     $form['buttons'] = $buttons;
   }
+}
+
+
+function _wisski_find_cache_expires_validate($element, $form_state) {
+  
+  if (preg_match('/\D/', $element['#value'])) {
+    form_error($element, t('Only positive integer values allowed'));
+  }
+
 }
 
 
@@ -617,6 +635,7 @@ function wisski_find_showResult($form_state, $group, $record) {
   // if the list has the refresh flag we update the list
   // if it is older than the setting says (default: one day)
   if ($record['status'] == WISSKI_FIND_REFRESH && $record['timestamp'] < time() - variable_get('wisski_find_cache_expires', 60 * 60 * 24)) {
+dpm('refresh');    
     $search = unserialize(db_decode_blob($record['search']));
     $uris = wisski_find_build_result_list($group, $search, user_load($record['user']));
     db_query("UPDATE {wisski_find} SET result = %b, timestamp = %d WHERE sid = '%s'", serialize($uris), time(), $record['sid']);
@@ -806,15 +825,35 @@ function wisski_find_showResult($form_state, $group, $record) {
       '#submit' => array('wisski_find_delete_record'),
       '#weight' => 410,
     );
-  }
-  if ($record['status'] != WISSKI_FIND_REFRESH && user_access('directly access wisski find')) {
-    $form['store']['note_new'] = array(
-      '#type' => 'markup',
-      '#prefix' => '<li>',
-      '#suffix' => '</li>',
-      '#value' => t('You can start this search anew with <a href="!l">this URL</a>.', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/do', array('query' => array('search' => drupal_to_js(unserialize(db_decode_blob($record['search'])))))))),
-      '#weight' => 100,
-    );
+  
+    if ($record['status'] != WISSKI_FIND_REFRESH && user_access('directly access wisski find')) {    
+      
+      $form['store']['note_new'] = array(
+        '#type' => 'markup',
+        '#prefix' => '<li>',
+        '#suffix' => '</li>',
+        '#value' => t('You can start this search anew with <a href="!l">this URL</a>.', array('!l' => url($base_root . $base_path . 'find/' . $group['id'] . '/do', array('query' => array('search' => drupal_to_js(unserialize(db_decode_blob($record['search'])))))))),
+        '#weight' => 100,
+      );
+
+    } elseif ($record['status'] == WISSKI_FIND_REFRESH && user_access('save wisski find results')) {
+      
+      $form['store']['note_refresh'] = array(
+        '#type' => 'markup',
+        '#prefix' => '<li>',
+        '#suffix' => '</li>',
+        '#value' => t('You may refresh the list now to reflect latest changes.'),
+        '#weight' => 420,
+      );
+      $form['store']['store_refresh'] = array(
+        '#type' => 'submit',
+        '#value' => 'Refresh',
+        '#submit' => array('wisski_find_refresh_record'),
+        '#weight' => 430,
+      );
+
+    }
+
   }
   
   return $form;
@@ -840,7 +879,14 @@ function wisski_find_save_record($form, $form_state) {
   } else {
     drupal_set_message(t('Bad search result ID: @id', array('@id' => $sid)), 'error');
   }
+  
+}
 
+
+function wisski_find_refresh_record($form, $form_state) {
+  
+  $sid = $form_state['values']['sid'];
+  db_query("UPDATE {wisski_find} SET timestamp = 0 WHERE sid = '%s'", $sid);
   
 }
 
