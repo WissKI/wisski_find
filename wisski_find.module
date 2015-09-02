@@ -1217,6 +1217,10 @@ function wisski_find_add_groups() {
 
     $data = wisski_pathbuilder_getPathData($group);
     
+    if(variable_get("wisski_find_show_only_main_groups", 1))
+      if($data['group_id'] != 0)
+        continue;
+    
     if(!($data['enabled']))
       continue;
     $item = array();
