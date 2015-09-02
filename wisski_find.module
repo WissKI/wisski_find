@@ -561,7 +561,6 @@ function wisski_find_build_result_list($group, $search, $user = NULL) {
   }
 
   // what follows is mainly the former function wisski_find_tuneResults()
-  
   $urirank = array();
   foreach ($uris as $uri => $pids) {
     //$urirank[$uri] = count($pids);
@@ -572,29 +571,58 @@ function wisski_find_build_result_list($group, $search, $user = NULL) {
   arsort($urirank);
   
   $nameduris = array();
-  // go through all ranks
-  foreach($urirank as $rank => $rankeduris) {
-    
-    // and sort by by title
-    foreach($rankeduris as $uri) {
-      $ntitle = $group['short_name'];
-
-      if (!$ntitle) {
-        $node = _wisski_find_getNodeForURI($uri);
-        $ntitle = $node->title;
-      } else {
-        include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
-        $ntitle = wisski_pathbuilder_generateGroupName($uri, $group['id']);
-        if($ntitle == $uri)
-          continue;
+  
+  // standard modus: sort by name, not by rank
+  if(variable_get('wisski_find_sort_by_title', 1)) {
+    foreach($urirank as $rank => $rankeduris) {
+      foreach($rankeduris as $uri) {
+        $ntitle = $group['short_name'];
+        
+        if (!$ntitle) {
+          $node = _wisski_find_getNodeForURI($uri);
+          $ntitle = $node->title;
+        } else {
+          include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+          $ntitle = wisski_pathbuilder_generateGroupName($uri, $group['id']);
+          if($ntitle == $uri)
+            continue;
+        }
+            
+        // rank is 0
+        $nameduris[0][$uri] = $ntitle; 
+        
       }
-      
-      $nameduris[$rank][$uri] = $ntitle;
     }
     
-    if(!empty($nameduris[$rank]))
-      asort($nameduris[$rank], SORT_NUMERIC);
+    if(!empty($nameduris[0]))
+      asort($nameduris[0], SORT_STRING);
+    
+  } else {
+    // go through all ranks
+    foreach($urirank as $rank => $rankeduris) {
+    
+      // and sort by by title
+      foreach($rankeduris as $uri) {
+        $ntitle = $group['short_name'];
+
+        if (!$ntitle) {
+          $node = _wisski_find_getNodeForURI($uri);
+          $ntitle = $node->title;
+        } else {
+          include_once(drupal_get_path('module', 'wisski_pathbuilder') . '/wisski_pathbuilder.inc');
+          $ntitle = wisski_pathbuilder_generateGroupName($uri, $group['id']);
+          if($ntitle == $uri)
+            continue;
+        }
+      
+        $nameduris[$rank][$uri] = $ntitle;
+      }
+    
+      if(!empty($nameduris[$rank]))
+        asort($nameduris[$rank], SORT_STRING);
+    }
   }
+  
     
   $outuris = array();
   foreach($nameduris as $rank => $sorteduris) {

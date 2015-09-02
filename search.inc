@@ -130,6 +130,56 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
     drupal_set_message("Invalid matching mode: '$match_op'", 'error');
   }
 
+  /*
+  $orderpath = variable_get("wisski_order_path", array());
+  
+  $groupid = arg(1);
+  
+  $orderpath = $orderpath[$groupid];
+  
+  if(!empty($orderpath) && !is_array($orderpath)) {
+    $orderpath = array($orderpath);
+  }
+  
+  
+  if(!empty($orderpath)) {
+    $sparql = "";
+    $orderby = " ORDER BY ";
+    
+    foreach($orderpath as $currpathid => $currpath) {
+      
+      if(empty($currpath))
+        continue;
+      
+      // get the path for the order by
+      $sparqlorderparts = wisski_pathbuilder_get_sparql($currpath, "", TRUE);
+      
+      $sparqlorder = "";
+      
+      foreach($sparqlorderparts["triples"] as $triple) {
+        $sparqlorder .= $triple . " . ";
+      }
+      
+      $sparqlorder = str_replace("?x", "?u" . $currpathid . '_', $sparqlorder);
+      $sparqlorder = str_replace("?out", "?orderout" . $currpathid, $sparqlorder);
+      $sparqlorder = str_replace("?u" . $currpathid . "_0", "?x0", $sparqlorder);
+                              
+      $sparql .= " . OPTIONAL { " . $sparqlorder . " } . ";
+    
+      if(variable_get("wisski_navigator_alphanumeric_sort", 1)) {
+        $orderby .= ("DESC(BOUND(?orderout" . $currpathid . ")) ASC(xsd:string(?orderout" . $currpathid . ")) ");
+      } else {
+        $orderby .= ("?orderout" . $currpathid . " ");
+      }
+    }
+  }
+  
+  $q = substr($q, 0, -4) . $sparql . '} . ' . $orderby;
+
+  drupal_set_message(htmlentities($q));
+  
+  return "";
+*/
   $rows = $store->query($q, 'rows');
 
   if ($store->getErrors()) {
