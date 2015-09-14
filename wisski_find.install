@@ -37,6 +37,11 @@ function wisski_find_schema () {
         'size' => 'normal',
         'not null' => TRUE,
       ),
+      'fields' => array(
+        'type' => 'blob',
+        'size' => 'normal',
+        'not null' => TRUE,
+      ),
       'result' => array(
         'type' => 'blob',
         'size' => 'big',

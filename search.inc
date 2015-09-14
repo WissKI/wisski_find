@@ -189,7 +189,8 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
 
   $ret = array();
   foreach ($rows as $r) {
-    $ret[$r['x0']] = array(array('path' => $pathid, 'val' => $r['out']));
+    if (!isset($ret[$r['x0']])) $ret[$r['x0']] = array();
+    $ret[$r['x0']][] = array('path' => $pathid, 'val' => $r['out']);
   }
 
   return $ret;
