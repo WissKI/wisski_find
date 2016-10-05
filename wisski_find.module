@@ -207,9 +207,16 @@ function wisski_find_visualSettings() {
     '#type' => 'select',
     '#title' => t('Default operator'),
     '#description' => t('By default, search fields will be combined with this operator'),
-    '#default_value' => 'OR',
     '#options' => array('OR' => t('OR'), 'AND' => t('AND'), 'NOT' => t('NOT')),
     '#default_value' => variable_get('wisski_find_default_op', 'OR'),
+  );
+
+  $form['wisski_find_fieldset']['wisski_find_export_path_type'] = array(
+    '#type' => 'select',
+    '#title' => t('Pathbuilder for result list export'),
+    '#options' => wisski_pathbuilder_getPathbuilderTrees(),
+    '#description' => t('Select the pathbuilder that should be used for exporting result lists as Excel sheets.'),
+    '#default_value' => variable_get('wisski_find_export_path_type', 7),
   );
 
   return $form;
@@ -1058,9 +1065,7 @@ function wisski_find_export($form, $form_state) {
 
   $fh = fopen($filename, "w+");
 
-  $ftype = wisski_pathbuilder_getPathbuilderTrees();
-  $ftype = array_search('Find', $ftype);
-  if ($ftype === FALSE) $ftype = 2;
+  $ftype = variable_get('wisski_find_export_path_type', 7);
   
   $pathIds = wisski_pathbuilder_getEnabledInternaMembers($groupid, TRUE, TRUE, $ftype);
   
@@ -1072,10 +1077,9 @@ function wisski_find_export($form, $form_state) {
   
   foreach($uris as $uri => $values) {
     foreach($pathIds as $pathid) {
-      $sparql = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?x0 = <' . $uri . '> )', FALSE, 0, FALSE, array('?out'));
+      $sparql = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?x0 = <' . $uri . '> )', FALSE, 0, TRUE, array('?out'));
       
       $sprows = wisski_store_getObj()->wisski_ARCAdapter_getStore()->query($sparql, 'rows');
-
       if(count($sprows) > 1)
         fwrite($fh, "\"");
 

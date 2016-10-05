@@ -101,13 +101,27 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
   $term = $search['term'];
   $match_op = $search['match'];
 
-  include_once(drupal_get_path('module', 'wisski_pathbuilder') . "/wisski_pathbuilder.inc");
+  $operators = array(
+    'smaller' => '<',
+    'smallerequal' => '<=',
+    'bigger' => '>',
+    'biggerequal' => '>=',
+    'exact' => 1,
+    'like' => 1,
+    'regex' => 1,
+    'not_empty' => 1,
+  );
+  if (!isset($operators[$match_op])) {
+    drupal_set_message("Invalid matching mode: '$match_op'", 'error');
+    return array();
+  }
 
+  include_once(drupal_get_path('module', 'wisski_pathbuilder') . "/wisski_pathbuilder.inc");
 
   $path = wisski_pathbuilder_getPathData($pathid);
 
   $result = array();
-
+  
   foreach ($namespaces as $pre => $ns) $q .= "PREFIX $pre: <$ns>\n";
 
   if ($match_op == 'exact') {
@@ -118,16 +132,12 @@ function _wisski_find_searchTerm($search, $store, $namespaces) {
     $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER regex(?out, "' . str_replace('"', '\\"', $term) . '", "i") ', FALSE);
   } elseif($match_op == 'not_empty') {
     $q = wisski_pathbuilder_get_sparql($pathid, '', FALSE);
-  } elseif ($match_op == 'smaller') {
-    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out < "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
-  } elseif ($match_op == 'smallerequal') {
-    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out <= "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
-  } elseif ($match_op == 'bigger') {
-    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out > "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
-  } elseif ($match_op == 'biggerequal') {
-    $q = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?out >= "'.   str_replace('"', '\\"', $term) . '" ) ', FALSE);
   } else {
-    drupal_set_message("Invalid matching mode: '$match_op'", 'error');
+    $numeric_term = is_numeric(trim($term));
+    $term = $numeric_term ? trim($term) : ('"'.   str_replace('"', '\\"', $term) . '"');
+    $var = $numeric_term ? 'xsd:integer(?out)' : 'str(?out)';
+    $op = $operators[$match_op];
+    $q = wisski_pathbuilder_get_sparql($pathid, "FILTER ( $var $op $term ) ", FALSE);
   }
 
   /*
