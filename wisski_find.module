@@ -1085,7 +1085,10 @@ function wisski_find_export($form, $form_state) {
 
       $i = 0;
       foreach($sprows as $sprow) {
-        fwrite($fh, iconv('UTF-8', 'cp1250', $sprow['out']));
+        $var = strip_tags($sprow['out']);
+        $var = str_replace('"', '""', $var);
+        fwrite($fh, iconv('UTF-8', 'cp1250', $var));
+                        
         $i++;
         if($i < count($sprows))
           fwrite($fh, "\n");
