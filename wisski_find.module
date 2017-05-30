@@ -1080,8 +1080,8 @@ function wisski_find_export($form, $form_state) {
       $sparql = wisski_pathbuilder_get_sparql($pathid, 'FILTER ( ?x0 = <' . $uri . '> )', FALSE, 0, TRUE, array('?out'));
       
       $sprows = wisski_store_getObj()->wisski_ARCAdapter_getStore()->query($sparql, 'rows');
-      if(count($sprows) > 1)
-        fwrite($fh, "\"");
+#      if(count($sprows) > 1)
+      fwrite($fh, "\"");
 
       $i = 0;
       foreach($sprows as $sprow) {
@@ -1090,8 +1090,8 @@ function wisski_find_export($form, $form_state) {
         if($i < count($sprows))
           fwrite($fh, "\n");
       }
-      if(count($sprows) > 1)   
-        fwrite($fh, "\"");
+#      if(count($sprows) > 1)   
+      fwrite($fh, "\"");
       fwrite($fh, "\t");
     }
     fwrite($fh, "\n");
